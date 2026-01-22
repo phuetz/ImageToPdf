@@ -106,7 +106,7 @@ public class MainForm : Form
             ShortcutKeys = Keys.Control | Keys.W
         };
 
-        var openPdfSamItem = new ToolStripMenuItem("Ouvrir PDF SAM", null, OpenPdfSam_Click)
+        var openPdfSamItem = new ToolStripMenuItem("Ouvrir PDFsam", null, OpenPdfSam_Click)
         {
             ShortcutKeys = Keys.Control | Keys.P
         };
@@ -1028,14 +1028,20 @@ public class MainForm : Form
 
     private void OpenPdfSam_Click(object? sender, EventArgs e)
     {
-        // Chemins possibles pour PDF SAM
+        // Chemins possibles pour PDFsam
         var possiblePaths = new[]
         {
             @"C:\Program Files\PDFsam Basic\pdfsam.exe",
+            @"C:\Program Files\PDFsam Basic\PDFsam.exe",
             @"C:\Program Files (x86)\PDFsam Basic\pdfsam.exe",
+            @"C:\Program Files (x86)\PDFsam Basic\PDFsam.exe",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PDFsam Basic\pdfsam.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\PDFsam Basic\pdfsam.exe"),
             @"C:\Program Files\PDFsam\pdfsam.exe",
-            @"C:\Program Files (x86)\PDFsam\pdfsam.exe"
+            @"C:\Program Files (x86)\PDFsam\pdfsam.exe",
+            // Version Enhanced
+            @"C:\Program Files\PDFsam Enhanced\pdfsam.exe",
+            @"C:\Program Files (x86)\PDFsam Enhanced\pdfsam.exe",
         };
 
         string? pdfSamPath = null;
@@ -1052,9 +1058,9 @@ public class MainForm : Form
         if (pdfSamPath == null)
         {
             var result = MessageBox.Show(
-                "PDF SAM n'a pas été trouvé sur votre système.\n\n" +
+                "PDFsam n'a pas été trouvé sur votre système.\n\n" +
                 "Voulez-vous le télécharger depuis le site officiel?",
-                "PDF SAM non trouvé",
+                "PDFsam non trouvé",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
 
