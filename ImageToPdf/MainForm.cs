@@ -2,26 +2,42 @@ using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
 using Markdig;
+using System.Drawing.Drawing2D;
 
 namespace ImageToPdf;
 
 public class MainForm : Form
 {
-    private ListBox listBoxFiles;
-    private Button btnAddFiles;
-    private Button btnRemoveSelected;
-    private Button btnMoveUp;
-    private Button btnMoveDown;
-    private Button btnClear;
-    private Button btnConvert;
-    private Label lblInfo;
-    private ProgressBar progressBar;
+    private ListView listViewFiles = null!;
+    private ImageList imageListIcons = null!;
+    private Button btnAddFiles = null!;
+    private Button btnRemoveSelected = null!;
+    private Button btnMoveUp = null!;
+    private Button btnMoveDown = null!;
+    private Button btnClear = null!;
+    private Button btnConvert = null!;
+    private Button btnTogglePreview = null!;
+    private Label lblInfo = null!;
+    private ProgressBar progressBar = null!;
+
+    // Panneau de prévisualisation
+    private Panel previewPanel = null!;
+    private PictureBox pictureBoxPreview = null!;
+    private RichTextBox textBoxPreview = null!;
+    private Label lblPreviewInfo = null!;
+    private Label lblNoPreview = null!;
+    private Splitter splitter = null!;
 
     private List<string> filePaths = new();
+    private bool previewVisible = false;
 
     private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
     private static readonly string[] PdfExtensions = { ".pdf" };
     private static readonly string[] MarkdownExtensions = { ".md", ".markdown" };
+
+    private const int ICON_IMAGE = 0;
+    private const int ICON_PDF = 1;
+    private const int ICON_MARKDOWN = 2;
 
     public MainForm()
     {
@@ -30,10 +46,12 @@ public class MainForm : Form
 
     private void InitializeComponent()
     {
-        this.Text = "PDF Merger - Images, PDF & Markdown";
-        this.Size = new Size(650, 500);
-        this.MinimumSize = new Size(550, 400);
+        this.Text = "PDF Merger";
+        this.Size = new Size(700, 550);
+        this.MinimumSize = new Size(600, 450);
         this.StartPosition = FormStartPosition.CenterScreen;
+
+        CreateImageList();
 
         // Label info
         lblInfo = new Label
@@ -43,52 +61,58 @@ public class MainForm : Form
             Size = new Size(400, 20)
         };
 
-        // ListBox pour les fichiers
-        listBoxFiles = new ListBox
+        // ListView pour les fichiers avec icônes
+        listViewFiles = new ListView
         {
             Location = new Point(12, 35),
-            Size = new Size(440, 350),
+            Size = new Size(400, 350),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-            SelectionMode = SelectionMode.MultiExtended,
-            HorizontalScrollbar = true
+            View = View.Details,
+            FullRowSelect = true,
+            SmallImageList = imageListIcons,
+            MultiSelect = true,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable
         };
+        listViewFiles.Columns.Add("Fichier", 350);
+        listViewFiles.Columns.Add("Type", 60);
+        listViewFiles.SelectedIndexChanged += ListViewFiles_SelectedIndexChanged;
 
         // Boutons
-        int btnX = 460;
-        int btnWidth = 160;
+        int btnX = 420;
+        int btnWidth = 130;
 
         btnAddFiles = new Button
         {
-            Text = "Ajouter fichiers...",
+            Text = "Ajouter...",
             Location = new Point(btnX, 35),
-            Size = new Size(btnWidth, 30),
+            Size = new Size(btnWidth, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         btnAddFiles.Click += BtnAddFiles_Click;
 
         btnRemoveSelected = new Button
         {
-            Text = "Supprimer sélection",
-            Location = new Point(btnX, 70),
-            Size = new Size(btnWidth, 30),
+            Text = "Supprimer",
+            Location = new Point(btnX, 67),
+            Size = new Size(btnWidth, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         btnRemoveSelected.Click += BtnRemoveSelected_Click;
 
         btnMoveUp = new Button
         {
-            Text = "Monter ↑",
-            Location = new Point(btnX, 115),
-            Size = new Size(btnWidth, 30),
+            Text = "▲ Monter",
+            Location = new Point(btnX, 110),
+            Size = new Size(btnWidth, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         btnMoveUp.Click += BtnMoveUp_Click;
 
         btnMoveDown = new Button
         {
-            Text = "Descendre ↓",
-            Location = new Point(btnX, 150),
-            Size = new Size(btnWidth, 30),
+            Text = "▼ Descendre",
+            Location = new Point(btnX, 142),
+            Size = new Size(btnWidth, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         btnMoveDown.Click += BtnMoveDown_Click;
@@ -96,17 +120,26 @@ public class MainForm : Form
         btnClear = new Button
         {
             Text = "Tout effacer",
-            Location = new Point(btnX, 195),
-            Size = new Size(btnWidth, 30),
+            Location = new Point(btnX, 185),
+            Size = new Size(btnWidth, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         btnClear.Click += BtnClear_Click;
 
+        btnTogglePreview = new Button
+        {
+            Text = "Aperçu ▶",
+            Location = new Point(btnX, 240),
+            Size = new Size(btnWidth, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
+        btnTogglePreview.Click += BtnTogglePreview_Click;
+
         btnConvert = new Button
         {
             Text = "Créer le PDF",
-            Location = new Point(btnX, 280),
-            Size = new Size(btnWidth, 45),
+            Location = new Point(btnX, 310),
+            Size = new Size(btnWidth, 40),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             BackColor = Color.FromArgb(0, 120, 215),
             ForeColor = Color.White,
@@ -118,22 +151,240 @@ public class MainForm : Form
         progressBar = new ProgressBar
         {
             Location = new Point(12, 400),
-            Size = new Size(606, 25),
+            Size = new Size(538, 25),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             Visible = false
         };
 
+        // Splitter
+        splitter = new Splitter
+        {
+            Dock = DockStyle.Right,
+            Width = 5,
+            BackColor = Color.LightGray,
+            Visible = false
+        };
+
+        // Panneau de prévisualisation
+        CreatePreviewPanel();
+
         // Ajouter les contrôles
         this.Controls.AddRange(new Control[]
         {
-            lblInfo, listBoxFiles, btnAddFiles, btnRemoveSelected,
-            btnMoveUp, btnMoveDown, btnClear, btnConvert, progressBar
+            lblInfo, listViewFiles, btnAddFiles, btnRemoveSelected,
+            btnMoveUp, btnMoveDown, btnClear, btnTogglePreview, btnConvert,
+            progressBar, splitter, previewPanel
         });
 
         // Support du drag & drop
         this.AllowDrop = true;
         this.DragEnter += MainForm_DragEnter;
         this.DragDrop += MainForm_DragDrop;
+    }
+
+    private void CreateImageList()
+    {
+        imageListIcons = new ImageList
+        {
+            ImageSize = new Size(16, 16),
+            ColorDepth = ColorDepth.Depth32Bit
+        };
+
+        // Créer les icônes programmatiquement
+        imageListIcons.Images.Add("image", CreateIcon(Color.FromArgb(76, 175, 80), "IMG"));
+        imageListIcons.Images.Add("pdf", CreateIcon(Color.FromArgb(244, 67, 54), "PDF"));
+        imageListIcons.Images.Add("markdown", CreateIcon(Color.FromArgb(33, 150, 243), "MD"));
+    }
+
+    private static Bitmap CreateIcon(Color color, string text)
+    {
+        var bmp = new Bitmap(16, 16);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        using var brush = new SolidBrush(color);
+        g.FillRectangle(brush, 0, 0, 16, 16);
+
+        using var font = new Font("Arial", 5, FontStyle.Bold);
+        using var textBrush = new SolidBrush(Color.White);
+        var size = g.MeasureString(text, font);
+        g.DrawString(text, font, textBrush, (16 - size.Width) / 2, (16 - size.Height) / 2);
+
+        return bmp;
+    }
+
+    private void CreatePreviewPanel()
+    {
+        previewPanel = new Panel
+        {
+            Dock = DockStyle.Right,
+            Width = 350,
+            Visible = false,
+            BackColor = Color.FromArgb(245, 245, 245),
+            Padding = new Padding(10)
+        };
+
+        lblPreviewInfo = new Label
+        {
+            Text = "Aperçu",
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Location = new Point(10, 10),
+            Size = new Size(330, 25),
+            ForeColor = Color.FromArgb(50, 50, 50)
+        };
+
+        pictureBoxPreview = new PictureBox
+        {
+            Location = new Point(10, 40),
+            Size = new Size(330, 300),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Visible = false
+        };
+
+        textBoxPreview = new RichTextBox
+        {
+            Location = new Point(10, 40),
+            Size = new Size(330, 300),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            ReadOnly = true,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Consolas", 9),
+            Visible = false
+        };
+
+        lblNoPreview = new Label
+        {
+            Text = "Sélectionnez un fichier\npour voir l'aperçu",
+            Location = new Point(10, 150),
+            Size = new Size(330, 60),
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.Gray,
+            Font = new Font("Segoe UI", 10)
+        };
+
+        previewPanel.Controls.AddRange(new Control[]
+        {
+            lblPreviewInfo, pictureBoxPreview, textBoxPreview, lblNoPreview
+        });
+    }
+
+    private void BtnTogglePreview_Click(object? sender, EventArgs e)
+    {
+        previewVisible = !previewVisible;
+        previewPanel.Visible = previewVisible;
+        splitter.Visible = previewVisible;
+
+        if (previewVisible)
+        {
+            btnTogglePreview.Text = "◀ Aperçu";
+            this.Width = Math.Max(this.Width, 1000);
+            UpdatePreview();
+        }
+        else
+        {
+            btnTogglePreview.Text = "Aperçu ▶";
+        }
+    }
+
+    private void ListViewFiles_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (previewVisible)
+        {
+            UpdatePreview();
+        }
+    }
+
+    private void UpdatePreview()
+    {
+        pictureBoxPreview.Visible = false;
+        textBoxPreview.Visible = false;
+        lblNoPreview.Visible = true;
+        pictureBoxPreview.Image?.Dispose();
+        pictureBoxPreview.Image = null;
+
+        if (listViewFiles.SelectedIndices.Count == 0)
+        {
+            lblPreviewInfo.Text = "Aperçu";
+            lblNoPreview.Text = "Sélectionnez un fichier\npour voir l'aperçu";
+            return;
+        }
+
+        var index = listViewFiles.SelectedIndices[0];
+        var filePath = filePaths[index];
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        var fileName = Path.GetFileName(filePath);
+
+        lblPreviewInfo.Text = fileName.Length > 40 ? fileName[..37] + "..." : fileName;
+
+        try
+        {
+            if (ImageExtensions.Contains(ext))
+            {
+                ShowImagePreview(filePath);
+            }
+            else if (PdfExtensions.Contains(ext))
+            {
+                ShowPdfPreview(filePath);
+            }
+            else if (MarkdownExtensions.Contains(ext))
+            {
+                ShowMarkdownPreview(filePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            lblNoPreview.Text = $"Erreur:\n{ex.Message}";
+            lblNoPreview.Visible = true;
+        }
+    }
+
+    private void ShowImagePreview(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        var img = Image.FromStream(stream);
+        pictureBoxPreview.Image = new Bitmap(img);
+        img.Dispose();
+
+        pictureBoxPreview.Visible = true;
+        lblNoPreview.Visible = false;
+    }
+
+    private void ShowPdfPreview(string filePath)
+    {
+        using var doc = PdfReader.Open(filePath, PdfDocumentOpenMode.Import);
+        var pageCount = doc.PageCount;
+        var firstPage = doc.Pages[0];
+        var width = firstPage.Width.Point;
+        var height = firstPage.Height.Point;
+
+        textBoxPreview.Clear();
+        textBoxPreview.SelectionFont = new Font("Segoe UI", 11, FontStyle.Bold);
+        textBoxPreview.AppendText("Document PDF\n\n");
+        textBoxPreview.SelectionFont = new Font("Segoe UI", 10);
+        textBoxPreview.AppendText($"📄 Nombre de pages: {pageCount}\n\n");
+        textBoxPreview.AppendText($"📐 Dimensions: {width:F0} x {height:F0} pt\n\n");
+
+        var fileInfo = new FileInfo(filePath);
+        var sizeKb = fileInfo.Length / 1024.0;
+        var sizeStr = sizeKb > 1024 ? $"{sizeKb / 1024:F1} Mo" : $"{sizeKb:F0} Ko";
+        textBoxPreview.AppendText($"💾 Taille: {sizeStr}\n");
+
+        textBoxPreview.Visible = true;
+        lblNoPreview.Visible = false;
+    }
+
+    private void ShowMarkdownPreview(string filePath)
+    {
+        var content = File.ReadAllText(filePath);
+
+        textBoxPreview.Clear();
+        textBoxPreview.Text = content;
+        textBoxPreview.Visible = true;
+        lblNoPreview.Visible = false;
     }
 
     private void MainForm_DragEnter(object? sender, DragEventArgs e)
@@ -182,50 +433,56 @@ public class MainForm : Form
             if (allValidExtensions.Contains(ext) && !filePaths.Contains(file))
             {
                 filePaths.Add(file);
-                var fileType = GetFileType(ext);
-                listBoxFiles.Items.Add($"[{fileType}] {Path.GetFileName(file)}");
+                var (iconIndex, typeName) = GetFileTypeInfo(ext);
+
+                var item = new ListViewItem(Path.GetFileName(file), iconIndex);
+                item.SubItems.Add(typeName);
+                listViewFiles.Items.Add(item);
             }
         }
 
         UpdateTitle();
     }
 
-    private static string GetFileType(string extension)
+    private static (int iconIndex, string typeName) GetFileTypeInfo(string extension)
     {
-        if (ImageExtensions.Contains(extension)) return "IMG";
-        if (PdfExtensions.Contains(extension)) return "PDF";
-        if (MarkdownExtensions.Contains(extension)) return "MD";
-        return "???";
+        if (ImageExtensions.Contains(extension)) return (ICON_IMAGE, "Image");
+        if (PdfExtensions.Contains(extension)) return (ICON_PDF, "PDF");
+        if (MarkdownExtensions.Contains(extension)) return (ICON_MARKDOWN, "Markdown");
+        return (0, "?");
     }
 
     private void BtnRemoveSelected_Click(object? sender, EventArgs e)
     {
-        var indices = listBoxFiles.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
+        var indices = listViewFiles.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
         foreach (var index in indices)
         {
             filePaths.RemoveAt(index);
-            listBoxFiles.Items.RemoveAt(index);
+            listViewFiles.Items.RemoveAt(index);
         }
         UpdateTitle();
+        UpdatePreview();
     }
 
     private void BtnMoveUp_Click(object? sender, EventArgs e)
     {
-        if (listBoxFiles.SelectedIndex > 0)
+        if (listViewFiles.SelectedIndices.Count > 0 && listViewFiles.SelectedIndices[0] > 0)
         {
-            int index = listBoxFiles.SelectedIndex;
+            int index = listViewFiles.SelectedIndices[0];
             SwapItems(index, index - 1);
-            listBoxFiles.SelectedIndex = index - 1;
+            listViewFiles.Items[index - 1].Selected = true;
+            listViewFiles.Items[index - 1].Focused = true;
         }
     }
 
     private void BtnMoveDown_Click(object? sender, EventArgs e)
     {
-        if (listBoxFiles.SelectedIndex >= 0 && listBoxFiles.SelectedIndex < listBoxFiles.Items.Count - 1)
+        if (listViewFiles.SelectedIndices.Count > 0 && listViewFiles.SelectedIndices[0] < listViewFiles.Items.Count - 1)
         {
-            int index = listBoxFiles.SelectedIndex;
+            int index = listViewFiles.SelectedIndices[0];
             SwapItems(index, index + 1);
-            listBoxFiles.SelectedIndex = index + 1;
+            listViewFiles.Items[index + 1].Selected = true;
+            listViewFiles.Items[index + 1].Focused = true;
         }
     }
 
@@ -233,16 +490,28 @@ public class MainForm : Form
     {
         (filePaths[index1], filePaths[index2]) = (filePaths[index2], filePaths[index1]);
 
-        var temp = listBoxFiles.Items[index1];
-        listBoxFiles.Items[index1] = listBoxFiles.Items[index2];
-        listBoxFiles.Items[index2] = temp;
+        var item1 = listViewFiles.Items[index1];
+        var item2 = listViewFiles.Items[index2];
+
+        var text1 = item1.Text;
+        var sub1 = item1.SubItems[1].Text;
+        var icon1 = item1.ImageIndex;
+
+        item1.Text = item2.Text;
+        item1.SubItems[1].Text = item2.SubItems[1].Text;
+        item1.ImageIndex = item2.ImageIndex;
+
+        item2.Text = text1;
+        item2.SubItems[1].Text = sub1;
+        item2.ImageIndex = icon1;
     }
 
     private void BtnClear_Click(object? sender, EventArgs e)
     {
         filePaths.Clear();
-        listBoxFiles.Items.Clear();
+        listViewFiles.Items.Clear();
         UpdateTitle();
+        UpdatePreview();
     }
 
     private void UpdateTitle()
@@ -302,6 +571,7 @@ public class MainForm : Form
         btnMoveDown.Enabled = enabled;
         btnClear.Enabled = enabled;
         btnConvert.Enabled = enabled;
+        btnTogglePreview.Enabled = enabled;
     }
 
     private void CreatePdf(string outputPath)
