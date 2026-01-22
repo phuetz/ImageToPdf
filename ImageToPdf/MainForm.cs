@@ -20,6 +20,11 @@ public class MainForm : Form
     private Label lblInfo = null!;
     private ProgressBar progressBar = null!;
 
+    // Panels pour la disposition
+    private Panel mainPanel = null!;
+    private Panel buttonPanel = null!;
+    private Panel contentPanel = null!;
+
     // Panneau de prévisualisation
     private Panel previewPanel = null!;
     private PictureBox pictureBoxPreview = null!;
@@ -47,139 +52,172 @@ public class MainForm : Form
     private void InitializeComponent()
     {
         this.Text = "PDF Merger";
-        this.Size = new Size(700, 550);
-        this.MinimumSize = new Size(600, 450);
+        this.Size = new Size(650, 520);
+        this.MinimumSize = new Size(550, 420);
         this.StartPosition = FormStartPosition.CenterScreen;
 
         CreateImageList();
+        CreatePreviewPanel();
+        CreateMainPanel();
 
-        // Label info
-        lblInfo = new Label
-        {
-            Text = "Ajoutez des images, PDF ou fichiers Markdown à fusionner:",
-            Location = new Point(12, 12),
-            Size = new Size(400, 20)
-        };
-
-        // ListView pour les fichiers avec icônes
-        listViewFiles = new ListView
-        {
-            Location = new Point(12, 35),
-            Size = new Size(400, 350),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-            View = View.Details,
-            FullRowSelect = true,
-            SmallImageList = imageListIcons,
-            MultiSelect = true,
-            HeaderStyle = ColumnHeaderStyle.Nonclickable
-        };
-        listViewFiles.Columns.Add("Fichier", 350);
-        listViewFiles.Columns.Add("Type", 60);
-        listViewFiles.SelectedIndexChanged += ListViewFiles_SelectedIndexChanged;
-
-        // Boutons
-        int btnX = 420;
-        int btnWidth = 130;
-
-        btnAddFiles = new Button
-        {
-            Text = "Ajouter...",
-            Location = new Point(btnX, 35),
-            Size = new Size(btnWidth, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-        btnAddFiles.Click += BtnAddFiles_Click;
-
-        btnRemoveSelected = new Button
-        {
-            Text = "Supprimer",
-            Location = new Point(btnX, 67),
-            Size = new Size(btnWidth, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-        btnRemoveSelected.Click += BtnRemoveSelected_Click;
-
-        btnMoveUp = new Button
-        {
-            Text = "▲ Monter",
-            Location = new Point(btnX, 110),
-            Size = new Size(btnWidth, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-        btnMoveUp.Click += BtnMoveUp_Click;
-
-        btnMoveDown = new Button
-        {
-            Text = "▼ Descendre",
-            Location = new Point(btnX, 142),
-            Size = new Size(btnWidth, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-        btnMoveDown.Click += BtnMoveDown_Click;
-
-        btnClear = new Button
-        {
-            Text = "Tout effacer",
-            Location = new Point(btnX, 185),
-            Size = new Size(btnWidth, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-        btnClear.Click += BtnClear_Click;
-
-        btnTogglePreview = new Button
-        {
-            Text = "Aperçu ▶",
-            Location = new Point(btnX, 240),
-            Size = new Size(btnWidth, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-        btnTogglePreview.Click += BtnTogglePreview_Click;
-
-        btnConvert = new Button
-        {
-            Text = "Créer le PDF",
-            Location = new Point(btnX, 310),
-            Size = new Size(btnWidth, 40),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            BackColor = Color.FromArgb(0, 120, 215),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat
-        };
-        btnConvert.Click += BtnConvert_Click;
-
-        // ProgressBar
-        progressBar = new ProgressBar
-        {
-            Location = new Point(12, 400),
-            Size = new Size(538, 25),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-            Visible = false
-        };
-
-        // Splitter
+        // Splitter entre main et preview
         splitter = new Splitter
         {
             Dock = DockStyle.Right,
-            Width = 5,
-            BackColor = Color.LightGray,
+            Width = 4,
+            BackColor = Color.FromArgb(200, 200, 200),
             Visible = false
         };
 
-        // Panneau de prévisualisation
-        CreatePreviewPanel();
-
-        // Ajouter les contrôles
-        this.Controls.AddRange(new Control[]
-        {
-            lblInfo, listViewFiles, btnAddFiles, btnRemoveSelected,
-            btnMoveUp, btnMoveDown, btnClear, btnTogglePreview, btnConvert,
-            progressBar, splitter, previewPanel
-        });
+        // Ordre important : d'abord les éléments Dock.Right, puis Dock.Fill
+        this.Controls.Add(previewPanel);
+        this.Controls.Add(splitter);
+        this.Controls.Add(mainPanel);
 
         // Support du drag & drop
         this.AllowDrop = true;
         this.DragEnter += MainForm_DragEnter;
         this.DragDrop += MainForm_DragDrop;
+    }
+
+    private void CreateMainPanel()
+    {
+        mainPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10)
+        };
+
+        // Label info en haut
+        lblInfo = new Label
+        {
+            Text = "Ajoutez des images, PDF ou fichiers Markdown à fusionner:",
+            Dock = DockStyle.Top,
+            Height = 25,
+            Padding = new Padding(0, 5, 0, 0)
+        };
+
+        // Panneau des boutons à droite
+        buttonPanel = new Panel
+        {
+            Dock = DockStyle.Right,
+            Width = 140,
+            Padding = new Padding(10, 0, 0, 0)
+        };
+
+        int btnWidth = 125;
+        int btnY = 0;
+        int btnSpacing = 32;
+
+        btnAddFiles = new Button
+        {
+            Text = "Ajouter...",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28)
+        };
+        btnAddFiles.Click += BtnAddFiles_Click;
+        btnY += btnSpacing;
+
+        btnRemoveSelected = new Button
+        {
+            Text = "Supprimer",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28)
+        };
+        btnRemoveSelected.Click += BtnRemoveSelected_Click;
+        btnY += btnSpacing + 10;
+
+        btnMoveUp = new Button
+        {
+            Text = "▲ Monter",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28)
+        };
+        btnMoveUp.Click += BtnMoveUp_Click;
+        btnY += btnSpacing;
+
+        btnMoveDown = new Button
+        {
+            Text = "▼ Descendre",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28)
+        };
+        btnMoveDown.Click += BtnMoveDown_Click;
+        btnY += btnSpacing + 10;
+
+        btnClear = new Button
+        {
+            Text = "Tout effacer",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28)
+        };
+        btnClear.Click += BtnClear_Click;
+        btnY += btnSpacing + 20;
+
+        btnTogglePreview = new Button
+        {
+            Text = "Aperçu ▶",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28),
+            BackColor = Color.FromArgb(240, 240, 240)
+        };
+        btnTogglePreview.Click += BtnTogglePreview_Click;
+        btnY += btnSpacing + 30;
+
+        btnConvert = new Button
+        {
+            Text = "Créer le PDF",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 42),
+            BackColor = Color.FromArgb(0, 120, 215),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font(this.Font.FontFamily, 9, FontStyle.Bold)
+        };
+        btnConvert.Click += BtnConvert_Click;
+
+        buttonPanel.Controls.AddRange(new Control[]
+        {
+            btnAddFiles, btnRemoveSelected, btnMoveUp, btnMoveDown,
+            btnClear, btnTogglePreview, btnConvert
+        });
+
+        // Panneau du contenu (liste + progress bar)
+        contentPanel = new Panel
+        {
+            Dock = DockStyle.Fill
+        };
+
+        // ListView
+        listViewFiles = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true,
+            SmallImageList = imageListIcons,
+            MultiSelect = true,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        listViewFiles.Columns.Add("Fichier", 280);
+        listViewFiles.Columns.Add("Type", 70);
+        listViewFiles.SelectedIndexChanged += ListViewFiles_SelectedIndexChanged;
+
+        // ProgressBar
+        progressBar = new ProgressBar
+        {
+            Dock = DockStyle.Bottom,
+            Height = 23,
+            Visible = false
+        };
+
+        contentPanel.Controls.Add(listViewFiles);
+        contentPanel.Controls.Add(progressBar);
+
+        // Assemblage du panneau principal
+        mainPanel.Controls.Add(contentPanel);
+        mainPanel.Controls.Add(buttonPanel);
+        mainPanel.Controls.Add(lblInfo);
     }
 
     private void CreateImageList()
@@ -300,26 +338,31 @@ public class MainForm : Form
         previewPanel = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 350,
+            Width = 320,
             Visible = false,
-            BackColor = Color.FromArgb(245, 245, 245),
+            BackColor = Color.FromArgb(248, 248, 248),
             Padding = new Padding(10)
         };
 
         lblPreviewInfo = new Label
         {
             Text = "Aperçu",
+            Dock = DockStyle.Top,
+            Height = 30,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Location = new Point(10, 10),
-            Size = new Size(330, 25),
-            ForeColor = Color.FromArgb(50, 50, 50)
+            ForeColor = Color.FromArgb(50, 50, 50),
+            Padding = new Padding(0, 5, 0, 0)
+        };
+
+        var previewContentPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 5, 0, 0)
         };
 
         pictureBoxPreview = new PictureBox
         {
-            Location = new Point(10, 40),
-            Size = new Size(330, 300),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle,
@@ -328,9 +371,7 @@ public class MainForm : Form
 
         textBoxPreview = new RichTextBox
         {
-            Location = new Point(10, 40),
-            Size = new Size(330, 300),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            Dock = DockStyle.Fill,
             ReadOnly = true,
             BackColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle,
@@ -340,18 +381,20 @@ public class MainForm : Form
 
         lblNoPreview = new Label
         {
+            Dock = DockStyle.Fill,
             Text = "Sélectionnez un fichier\npour voir l'aperçu",
-            Location = new Point(10, 150),
-            Size = new Size(330, 60),
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.Gray,
-            Font = new Font("Segoe UI", 10)
+            Font = new Font("Segoe UI", 10),
+            BackColor = Color.White
         };
 
-        previewPanel.Controls.AddRange(new Control[]
-        {
-            lblPreviewInfo, pictureBoxPreview, textBoxPreview, lblNoPreview
-        });
+        previewContentPanel.Controls.Add(pictureBoxPreview);
+        previewContentPanel.Controls.Add(textBoxPreview);
+        previewContentPanel.Controls.Add(lblNoPreview);
+
+        previewPanel.Controls.Add(previewContentPanel);
+        previewPanel.Controls.Add(lblPreviewInfo);
     }
 
     private void BtnTogglePreview_Click(object? sender, EventArgs e)
@@ -362,13 +405,20 @@ public class MainForm : Form
 
         if (previewVisible)
         {
-            btnTogglePreview.Text = "◀ Aperçu";
-            this.Width = Math.Max(this.Width, 1000);
+            btnTogglePreview.Text = "◀ Masquer";
+            if (this.Width < 900)
+            {
+                this.Width = 950;
+            }
             UpdatePreview();
         }
         else
         {
             btnTogglePreview.Text = "Aperçu ▶";
+            if (this.Width > 700)
+            {
+                this.Width = 650;
+            }
         }
     }
 
@@ -400,7 +450,7 @@ public class MainForm : Form
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
         var fileName = Path.GetFileName(filePath);
 
-        lblPreviewInfo.Text = fileName.Length > 40 ? fileName[..37] + "..." : fileName;
+        lblPreviewInfo.Text = fileName.Length > 35 ? fileName[..32] + "..." : fileName;
 
         try
         {
@@ -444,16 +494,16 @@ public class MainForm : Form
         var height = firstPage.Height.Point;
 
         textBoxPreview.Clear();
-        textBoxPreview.SelectionFont = new Font("Segoe UI", 11, FontStyle.Bold);
+        textBoxPreview.SelectionFont = new Font("Segoe UI", 12, FontStyle.Bold);
         textBoxPreview.AppendText("Document PDF\n\n");
         textBoxPreview.SelectionFont = new Font("Segoe UI", 10);
-        textBoxPreview.AppendText($"📄 Nombre de pages: {pageCount}\n\n");
-        textBoxPreview.AppendText($"📐 Dimensions: {width:F0} x {height:F0} pt\n\n");
+        textBoxPreview.AppendText($"  Pages: {pageCount}\n\n");
+        textBoxPreview.AppendText($"  Dimensions: {width:F0} x {height:F0} pt\n\n");
 
         var fileInfo = new FileInfo(filePath);
         var sizeKb = fileInfo.Length / 1024.0;
         var sizeStr = sizeKb > 1024 ? $"{sizeKb / 1024:F1} Mo" : $"{sizeKb:F0} Ko";
-        textBoxPreview.AppendText($"💾 Taille: {sizeStr}\n");
+        textBoxPreview.AppendText($"  Taille: {sizeStr}\n");
 
         textBoxPreview.Visible = true;
         lblNoPreview.Visible = false;
