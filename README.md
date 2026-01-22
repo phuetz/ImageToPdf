@@ -2,19 +2,45 @@
 
 Application Windows permettant de fusionner des images, fichiers PDF et documents Markdown en un seul fichier PDF.
 
+## Éditions disponibles
+
+PDF Merger est disponible en trois éditions :
+
+| Fonctionnalité | Lite | Standard | Pro |
+|----------------|:----:|:--------:|:---:|
+| Fusion d'images (JPG, PNG, BMP, GIF, TIFF) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Fusion de fichiers PDF | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Glisser-déposer | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Réorganisation des fichiers | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Support Markdown | :x: | :white_check_mark: | :white_check_mark: |
+| Panneau d'aperçu | :x: | :white_check_mark: | :white_check_mark: |
+| Conversion PDF → Word | :x: | :white_check_mark: | :white_check_mark: |
+| Intégration PDFsam | :x: | :white_check_mark: | :white_check_mark: |
+| Numérotation des pages | :x: | :x: | :white_check_mark: |
+| Filigrane personnalisable | :x: | :x: | :white_check_mark: |
+| Choix du format de page | :x: | :x: | :white_check_mark: |
+| Paramètres de qualité d'image | :x: | :x: | :white_check_mark: |
+
+### Téléchargement
+
+- **[PDF Merger Lite](https://github.com/phuetz/ImageToPdf/releases)** - Léger et simple pour la fusion basique
+- **[PDF Merger Standard](https://github.com/phuetz/ImageToPdf/releases)** - Fonctionnalités complètes pour un usage quotidien
+- **[PDF Merger Pro](https://github.com/phuetz/ImageToPdf/releases)** - Toutes les options avancées
+
 ## Fonctionnalités
 
 - **Images** : JPG, JPEG, PNG, BMP, GIF, TIFF
 - **PDF** : Fusion de documents PDF existants (toutes les pages sont importées)
-- **Markdown** : Conversion des fichiers .md en pages PDF
+- **Markdown** : Conversion des fichiers .md en pages PDF (Standard et Pro)
 
 ### Interface
 
 - Sélection multiple de fichiers via le dialogue de fichiers
 - Glisser-déposer (drag & drop) directement dans la fenêtre
 - Réorganisation des fichiers (monter/descendre dans la liste)
-- Indicateur de type de fichier [IMG], [PDF], [MD]
+- Icônes de type de fichier (image, PDF, Markdown)
 - Barre de progression pendant la conversion
+- Panneau d'aperçu (Standard et Pro)
 
 ## Prérequis
 
