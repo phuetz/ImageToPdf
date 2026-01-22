@@ -16,6 +16,7 @@ public class MainForm : Form
     private Button btnMoveDown = null!;
     private Button btnClear = null!;
     private Button btnConvert = null!;
+    private Button btnPreviewResult = null!;
     private Button btnTogglePreview = null!;
     private Label lblInfo = null!;
     private ProgressBar progressBar = null!;
@@ -162,7 +163,19 @@ public class MainForm : Form
             BackColor = Color.FromArgb(240, 240, 240)
         };
         btnTogglePreview.Click += BtnTogglePreview_Click;
-        btnY += btnSpacing + 30;
+        btnY += btnSpacing + 20;
+
+        btnPreviewResult = new Button
+        {
+            Text = "Voir résultat",
+            Location = new Point(10, btnY),
+            Size = new Size(btnWidth, 28),
+            BackColor = Color.FromArgb(76, 175, 80),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat
+        };
+        btnPreviewResult.Click += BtnPreviewResult_Click;
+        btnY += btnSpacing + 10;
 
         btnConvert = new Button
         {
@@ -179,7 +192,7 @@ public class MainForm : Form
         buttonPanel.Controls.AddRange(new Control[]
         {
             btnAddFiles, btnRemoveSelected, btnMoveUp, btnMoveDown,
-            btnClear, btnTogglePreview, btnConvert
+            btnClear, btnTogglePreview, btnPreviewResult, btnConvert
         });
 
         // Panneau du contenu (liste + progress bar)
@@ -703,7 +716,48 @@ public class MainForm : Form
         btnMoveDown.Enabled = enabled;
         btnClear.Enabled = enabled;
         btnConvert.Enabled = enabled;
+        btnPreviewResult.Enabled = enabled;
         btnTogglePreview.Enabled = enabled;
+    }
+
+    private async void BtnPreviewResult_Click(object? sender, EventArgs e)
+    {
+        if (filePaths.Count == 0)
+        {
+            MessageBox.Show("Veuillez ajouter au moins un fichier.", "Aucun fichier",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var tempPath = Path.Combine(Path.GetTempPath(), $"PDFMerger_Preview_{Guid.NewGuid():N}.pdf");
+
+        progressBar.Visible = true;
+        progressBar.Value = 0;
+        progressBar.Maximum = filePaths.Count;
+        SetButtonsEnabled(false);
+
+        try
+        {
+            await Task.Run(() => CreatePdf(tempPath));
+
+            // Ouvrir le PDF avec l'application par défaut
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = tempPath,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erreur lors de la création de l'aperçu:\n{ex.Message}", "Erreur",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            progressBar.Visible = false;
+            SetButtonsEnabled(true);
+        }
     }
 
     private void CreatePdf(string outputPath)
