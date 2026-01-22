@@ -62,7 +62,7 @@ public class MainForm : Form
 
     private void InitializeComponent()
     {
-        this.Text = "PDF Merger";
+        this.Text = "PDF Merger Standard";
         this.Size = new Size(650, 550);
         this.MinimumSize = new Size(550, 450);
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -698,7 +698,7 @@ public class MainForm : Form
 
     private void UpdateTitle()
     {
-        this.Text = $"PDF Merger - {filePaths.Count} fichier(s)";
+        this.Text = $"PDF Merger Standard - {filePaths.Count} fichier(s)";
     }
 
     private async void BtnConvert_Click(object? sender, EventArgs e)
