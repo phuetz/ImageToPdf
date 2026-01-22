@@ -1,8 +1,17 @@
 using PdfSharpCore.Drawing;
-using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
 using Markdig;
 using System.Drawing.Drawing2D;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using PdfSharpDocument = PdfSharpCore.Pdf.PdfDocument;
+using WordDocument = DocumentFormat.OpenXml.Wordprocessing.Document;
+using WordBody = DocumentFormat.OpenXml.Wordprocessing.Body;
+using WordParagraph = DocumentFormat.OpenXml.Wordprocessing.Paragraph;
+using WordRun = DocumentFormat.OpenXml.Wordprocessing.Run;
+using WordText = DocumentFormat.OpenXml.Wordprocessing.Text;
 
 namespace ImageToPdf;
 
@@ -20,6 +29,7 @@ public class MainForm : Form
     private Button btnTogglePreview = null!;
     private Label lblInfo = null!;
     private ProgressBar progressBar = null!;
+    private MenuStrip menuStrip = null!;
 
     // Panels pour la disposition
     private Panel mainPanel = null!;
@@ -53,10 +63,11 @@ public class MainForm : Form
     private void InitializeComponent()
     {
         this.Text = "PDF Merger";
-        this.Size = new Size(650, 520);
-        this.MinimumSize = new Size(550, 420);
+        this.Size = new Size(650, 550);
+        this.MinimumSize = new Size(550, 450);
         this.StartPosition = FormStartPosition.CenterScreen;
 
+        CreateMenuStrip();
         CreateImageList();
         CreatePreviewPanel();
         CreateMainPanel();
@@ -74,11 +85,37 @@ public class MainForm : Form
         this.Controls.Add(previewPanel);
         this.Controls.Add(splitter);
         this.Controls.Add(mainPanel);
+        this.Controls.Add(menuStrip);
+        this.MainMenuStrip = menuStrip;
 
         // Support du drag & drop
         this.AllowDrop = true;
         this.DragEnter += MainForm_DragEnter;
         this.DragDrop += MainForm_DragDrop;
+    }
+
+    private void CreateMenuStrip()
+    {
+        menuStrip = new MenuStrip();
+
+        // Menu Outils
+        var toolsMenu = new ToolStripMenuItem("Outils");
+
+        var pdfToWordItem = new ToolStripMenuItem("PDF → Word", null, PdfToWord_Click)
+        {
+            ShortcutKeys = Keys.Control | Keys.W
+        };
+
+        var openPdfSamItem = new ToolStripMenuItem("Ouvrir PDF SAM", null, OpenPdfSam_Click)
+        {
+            ShortcutKeys = Keys.Control | Keys.P
+        };
+
+        toolsMenu.DropDownItems.Add(pdfToWordItem);
+        toolsMenu.DropDownItems.Add(new ToolStripSeparator());
+        toolsMenu.DropDownItems.Add(openPdfSamItem);
+
+        menuStrip.Items.Add(toolsMenu);
     }
 
     private void CreateMainPanel()
@@ -762,7 +799,7 @@ public class MainForm : Form
 
     private void CreatePdf(string outputPath)
     {
-        using var document = new PdfDocument();
+        using var document = new PdfSharpDocument();
         document.Info.Title = "Document fusionné";
         document.Info.Creator = "PDF Merger";
 
@@ -800,7 +837,7 @@ public class MainForm : Form
         document.Save(outputPath);
     }
 
-    private static void AddImageToPdf(PdfDocument document, string imagePath)
+    private static void AddImageToPdf(PdfSharpDocument document, string imagePath)
     {
         using var stream = File.OpenRead(imagePath);
         var image = XImage.FromStream(() => stream);
@@ -813,7 +850,7 @@ public class MainForm : Form
         gfx.DrawImage(image, 0, 0, page.Width, page.Height);
     }
 
-    private static void AddPdfToPdf(PdfDocument document, string pdfPath)
+    private static void AddPdfToPdf(PdfSharpDocument document, string pdfPath)
     {
         using var inputDocument = PdfReader.Open(pdfPath, PdfDocumentOpenMode.Import);
 
@@ -824,7 +861,7 @@ public class MainForm : Form
         }
     }
 
-    private static void AddMarkdownToPdf(PdfDocument document, string markdownPath)
+    private static void AddMarkdownToPdf(PdfSharpDocument document, string markdownPath)
     {
         var markdownContent = File.ReadAllText(markdownPath);
         var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -903,6 +940,149 @@ public class MainForm : Form
         {
             gfx.DrawString(currentLine, font, XBrushes.Black, x, y);
             y += lineHeight;
+        }
+    }
+
+    private async void PdfToWord_Click(object? sender, EventArgs e)
+    {
+        using var openDialog = new OpenFileDialog
+        {
+            Title = "Sélectionner un fichier PDF",
+            Filter = "PDF|*.pdf",
+            Multiselect = false
+        };
+
+        if (openDialog.ShowDialog() != DialogResult.OK)
+            return;
+
+        using var saveDialog = new SaveFileDialog
+        {
+            Title = "Enregistrer le fichier Word",
+            Filter = "Document Word|*.docx",
+            DefaultExt = "docx",
+            FileName = Path.GetFileNameWithoutExtension(openDialog.FileName) + ".docx"
+        };
+
+        if (saveDialog.ShowDialog() != DialogResult.OK)
+            return;
+
+        progressBar.Visible = true;
+        progressBar.Style = ProgressBarStyle.Marquee;
+        SetButtonsEnabled(false);
+
+        try
+        {
+            await Task.Run(() => ConvertPdfToWord(openDialog.FileName, saveDialog.FileName));
+
+            MessageBox.Show($"Conversion réussie!\n{saveDialog.FileName}", "Succès",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erreur lors de la conversion:\n{ex.Message}", "Erreur",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            progressBar.Style = ProgressBarStyle.Blocks;
+            progressBar.Visible = false;
+            SetButtonsEnabled(true);
+        }
+    }
+
+    private static void ConvertPdfToWord(string pdfPath, string wordPath)
+    {
+        // Extraire le texte du PDF avec iText7
+        var text = new System.Text.StringBuilder();
+
+        using (var pdfReader = new iText.Kernel.Pdf.PdfReader(pdfPath))
+        using (var pdfDoc = new iText.Kernel.Pdf.PdfDocument(pdfReader))
+        {
+            for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+            {
+                var page = pdfDoc.GetPage(i);
+                var strategy = new SimpleTextExtractionStrategy();
+                var pageText = PdfTextExtractor.GetTextFromPage(page, strategy);
+                text.AppendLine(pageText);
+                text.AppendLine(); // Séparateur de page
+            }
+        }
+
+        // Créer le document Word avec OpenXML
+        using var wordDoc = WordprocessingDocument.Create(wordPath, WordprocessingDocumentType.Document);
+
+        var mainPart = wordDoc.AddMainDocumentPart();
+        mainPart.Document = new WordDocument();
+        var body = mainPart.Document.AppendChild(new WordBody());
+
+        // Ajouter le texte paragraphe par paragraphe
+        var paragraphs = text.ToString().Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+        foreach (var para in paragraphs)
+        {
+            var paragraph = body.AppendChild(new WordParagraph());
+            var run = paragraph.AppendChild(new WordRun());
+            run.AppendChild(new WordText(para) { Space = SpaceProcessingModeValues.Preserve });
+        }
+    }
+
+    private void OpenPdfSam_Click(object? sender, EventArgs e)
+    {
+        // Chemins possibles pour PDF SAM
+        var possiblePaths = new[]
+        {
+            @"C:\Program Files\PDFsam Basic\pdfsam.exe",
+            @"C:\Program Files (x86)\PDFsam Basic\pdfsam.exe",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PDFsam Basic\pdfsam.exe"),
+            @"C:\Program Files\PDFsam\pdfsam.exe",
+            @"C:\Program Files (x86)\PDFsam\pdfsam.exe"
+        };
+
+        string? pdfSamPath = null;
+
+        foreach (var path in possiblePaths)
+        {
+            if (File.Exists(path))
+            {
+                pdfSamPath = path;
+                break;
+            }
+        }
+
+        if (pdfSamPath == null)
+        {
+            var result = MessageBox.Show(
+                "PDF SAM n'a pas été trouvé sur votre système.\n\n" +
+                "Voulez-vous le télécharger depuis le site officiel?",
+                "PDF SAM non trouvé",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://pdfsam.org/download-pdfsam-basic/",
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+            return;
+        }
+
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = pdfSamPath,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erreur lors du lancement de PDF SAM:\n{ex.Message}", "Erreur",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }
