@@ -186,29 +186,111 @@ public class MainForm : Form
     {
         imageListIcons = new ImageList
         {
-            ImageSize = new Size(16, 16),
+            ImageSize = new Size(20, 20),
             ColorDepth = ColorDepth.Depth32Bit
         };
 
-        // Créer les icônes programmatiquement
-        imageListIcons.Images.Add("image", CreateIcon(Color.FromArgb(76, 175, 80), "IMG"));
-        imageListIcons.Images.Add("pdf", CreateIcon(Color.FromArgb(244, 67, 54), "PDF"));
-        imageListIcons.Images.Add("markdown", CreateIcon(Color.FromArgb(33, 150, 243), "MD"));
+        imageListIcons.Images.Add("image", CreateImageIcon());
+        imageListIcons.Images.Add("pdf", CreatePdfIcon());
+        imageListIcons.Images.Add("markdown", CreateMarkdownIcon());
     }
 
-    private static Bitmap CreateIcon(Color color, string text)
+    private static Bitmap CreateImageIcon()
     {
-        var bmp = new Bitmap(16, 16);
+        var bmp = new Bitmap(20, 20);
         using var g = Graphics.FromImage(bmp);
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
 
-        using var brush = new SolidBrush(color);
-        g.FillRectangle(brush, 0, 0, 16, 16);
+        // Cadre de l'image
+        using var framePen = new Pen(Color.FromArgb(100, 100, 100), 1);
+        using var frameBrush = new SolidBrush(Color.FromArgb(240, 240, 240));
+        g.FillRectangle(frameBrush, 1, 1, 18, 18);
+        g.DrawRectangle(framePen, 1, 1, 17, 17);
 
-        using var font = new Font("Arial", 5, FontStyle.Bold);
+        // Ciel bleu
+        using var skyBrush = new SolidBrush(Color.FromArgb(135, 206, 250));
+        g.FillRectangle(skyBrush, 2, 2, 16, 10);
+
+        // Soleil
+        using var sunBrush = new SolidBrush(Color.FromArgb(255, 200, 50));
+        g.FillEllipse(sunBrush, 12, 3, 5, 5);
+
+        // Montagne verte
+        var mountain = new Point[] { new(2, 17), new(8, 8), new(14, 17) };
+        using var mountainBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
+        g.FillPolygon(mountainBrush, mountain);
+
+        // Petite montagne
+        var smallMountain = new Point[] { new(10, 17), new(15, 10), new(18, 17) };
+        using var smallMountainBrush = new SolidBrush(Color.FromArgb(56, 142, 60));
+        g.FillPolygon(smallMountainBrush, smallMountain);
+
+        return bmp;
+    }
+
+    private static Bitmap CreatePdfIcon()
+    {
+        var bmp = new Bitmap(20, 20);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
+
+        // Document blanc avec coin plié
+        var docPoints = new Point[] { new(3, 1), new(14, 1), new(17, 4), new(17, 18), new(3, 18) };
+        using var docBrush = new SolidBrush(Color.White);
+        using var docPen = new Pen(Color.FromArgb(200, 50, 50), 1);
+        g.FillPolygon(docBrush, docPoints);
+        g.DrawPolygon(docPen, docPoints);
+
+        // Coin plié
+        var foldPoints = new Point[] { new(14, 1), new(14, 4), new(17, 4) };
+        using var foldBrush = new SolidBrush(Color.FromArgb(230, 230, 230));
+        g.FillPolygon(foldBrush, foldPoints);
+        g.DrawPolygon(docPen, foldPoints);
+
+        // Bandeau rouge PDF
+        using var pdfBrush = new SolidBrush(Color.FromArgb(220, 50, 50));
+        g.FillRectangle(pdfBrush, 3, 10, 14, 7);
+
+        // Texte PDF
+        using var font = new Font("Arial", 6, FontStyle.Bold);
         using var textBrush = new SolidBrush(Color.White);
-        var size = g.MeasureString(text, font);
-        g.DrawString(text, font, textBrush, (16 - size.Width) / 2, (16 - size.Height) / 2);
+        g.DrawString("PDF", font, textBrush, 4, 10);
+
+        return bmp;
+    }
+
+    private static Bitmap CreateMarkdownIcon()
+    {
+        var bmp = new Bitmap(20, 20);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
+
+        // Document
+        using var docBrush = new SolidBrush(Color.White);
+        using var docPen = new Pen(Color.FromArgb(50, 50, 50), 1);
+        g.FillRectangle(docBrush, 2, 1, 16, 18);
+        g.DrawRectangle(docPen, 2, 1, 15, 17);
+
+        // Fond bleu pour le symbole
+        using var mdBgBrush = new SolidBrush(Color.FromArgb(33, 150, 243));
+        g.FillRectangle(mdBgBrush, 4, 5, 12, 10);
+
+        // Symbole M avec flèche (Markdown)
+        using var mdPen = new Pen(Color.White, 1.5f);
+
+        // M
+        g.DrawLine(mdPen, 6, 12, 6, 7);
+        g.DrawLine(mdPen, 6, 7, 8, 10);
+        g.DrawLine(mdPen, 8, 10, 10, 7);
+        g.DrawLine(mdPen, 10, 7, 10, 12);
+
+        // Flèche vers le bas
+        g.DrawLine(mdPen, 13, 7, 13, 12);
+        g.DrawLine(mdPen, 11, 10, 13, 12);
+        g.DrawLine(mdPen, 15, 10, 13, 12);
 
         return bmp;
     }
