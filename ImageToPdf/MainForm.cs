@@ -1,12 +1,14 @@
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
+using PdfSharpCore.Pdf.IO;
+using Markdig;
 
 namespace ImageToPdf;
 
 public class MainForm : Form
 {
-    private ListBox listBoxImages;
-    private Button btnAddImages;
+    private ListBox listBoxFiles;
+    private Button btnAddFiles;
     private Button btnRemoveSelected;
     private Button btnMoveUp;
     private Button btnMoveDown;
@@ -15,7 +17,11 @@ public class MainForm : Form
     private Label lblInfo;
     private ProgressBar progressBar;
 
-    private List<string> imagePaths = new();
+    private List<string> filePaths = new();
+
+    private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
+    private static readonly string[] PdfExtensions = { ".pdf" };
+    private static readonly string[] MarkdownExtensions = { ".md", ".markdown" };
 
     public MainForm()
     {
@@ -24,41 +30,41 @@ public class MainForm : Form
 
     private void InitializeComponent()
     {
-        this.Text = "Image to PDF Converter";
-        this.Size = new Size(600, 500);
-        this.MinimumSize = new Size(500, 400);
+        this.Text = "PDF Merger - Images, PDF & Markdown";
+        this.Size = new Size(650, 500);
+        this.MinimumSize = new Size(550, 400);
         this.StartPosition = FormStartPosition.CenterScreen;
 
         // Label info
         lblInfo = new Label
         {
-            Text = "Sélectionnez des images à convertir en PDF:",
+            Text = "Ajoutez des images, PDF ou fichiers Markdown à fusionner:",
             Location = new Point(12, 12),
-            Size = new Size(350, 20)
+            Size = new Size(400, 20)
         };
 
-        // ListBox pour les images
-        listBoxImages = new ListBox
+        // ListBox pour les fichiers
+        listBoxFiles = new ListBox
         {
             Location = new Point(12, 35),
-            Size = new Size(400, 350),
+            Size = new Size(440, 350),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             SelectionMode = SelectionMode.MultiExtended,
             HorizontalScrollbar = true
         };
 
         // Boutons
-        int btnX = 420;
-        int btnWidth = 150;
+        int btnX = 460;
+        int btnWidth = 160;
 
-        btnAddImages = new Button
+        btnAddFiles = new Button
         {
-            Text = "Ajouter images...",
+            Text = "Ajouter fichiers...",
             Location = new Point(btnX, 35),
             Size = new Size(btnWidth, 30),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
-        btnAddImages.Click += BtnAddImages_Click;
+        btnAddFiles.Click += BtnAddFiles_Click;
 
         btnRemoveSelected = new Button
         {
@@ -98,7 +104,7 @@ public class MainForm : Form
 
         btnConvert = new Button
         {
-            Text = "Convertir en PDF",
+            Text = "Créer le PDF",
             Location = new Point(btnX, 280),
             Size = new Size(btnWidth, 45),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
@@ -112,7 +118,7 @@ public class MainForm : Form
         progressBar = new ProgressBar
         {
             Location = new Point(12, 400),
-            Size = new Size(556, 25),
+            Size = new Size(606, 25),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             Visible = false
         };
@@ -120,7 +126,7 @@ public class MainForm : Form
         // Ajouter les contrôles
         this.Controls.AddRange(new Control[]
         {
-            lblInfo, listBoxImages, btnAddImages, btnRemoveSelected,
+            lblInfo, listBoxFiles, btnAddFiles, btnRemoveSelected,
             btnMoveUp, btnMoveDown, btnClear, btnConvert, progressBar
         });
 
@@ -143,99 +149,112 @@ public class MainForm : Form
         var files = e.Data?.GetData(DataFormats.FileDrop) as string[];
         if (files != null)
         {
-            AddImages(files);
+            AddFiles(files);
         }
     }
 
-    private void BtnAddImages_Click(object? sender, EventArgs e)
+    private void BtnAddFiles_Click(object? sender, EventArgs e)
     {
         using var dialog = new OpenFileDialog
         {
-            Title = "Sélectionner des images",
-            Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tiff;*.tif|Tous les fichiers|*.*",
+            Title = "Sélectionner des fichiers",
+            Filter = "Tous les fichiers supportés|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tiff;*.tif;*.pdf;*.md;*.markdown|" +
+                     "Images|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tiff;*.tif|" +
+                     "PDF|*.pdf|" +
+                     "Markdown|*.md;*.markdown|" +
+                     "Tous les fichiers|*.*",
             Multiselect = true
         };
 
         if (dialog.ShowDialog() == DialogResult.OK)
         {
-            AddImages(dialog.FileNames);
+            AddFiles(dialog.FileNames);
         }
     }
 
-    private void AddImages(string[] files)
+    private void AddFiles(string[] files)
     {
-        var validExtensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
+        var allValidExtensions = ImageExtensions.Concat(PdfExtensions).Concat(MarkdownExtensions).ToArray();
 
         foreach (var file in files)
         {
             var ext = Path.GetExtension(file).ToLowerInvariant();
-            if (validExtensions.Contains(ext) && !imagePaths.Contains(file))
+            if (allValidExtensions.Contains(ext) && !filePaths.Contains(file))
             {
-                imagePaths.Add(file);
-                listBoxImages.Items.Add(Path.GetFileName(file));
+                filePaths.Add(file);
+                var fileType = GetFileType(ext);
+                listBoxFiles.Items.Add($"[{fileType}] {Path.GetFileName(file)}");
             }
         }
 
         UpdateTitle();
     }
 
+    private static string GetFileType(string extension)
+    {
+        if (ImageExtensions.Contains(extension)) return "IMG";
+        if (PdfExtensions.Contains(extension)) return "PDF";
+        if (MarkdownExtensions.Contains(extension)) return "MD";
+        return "???";
+    }
+
     private void BtnRemoveSelected_Click(object? sender, EventArgs e)
     {
-        var indices = listBoxImages.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
+        var indices = listBoxFiles.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
         foreach (var index in indices)
         {
-            imagePaths.RemoveAt(index);
-            listBoxImages.Items.RemoveAt(index);
+            filePaths.RemoveAt(index);
+            listBoxFiles.Items.RemoveAt(index);
         }
         UpdateTitle();
     }
 
     private void BtnMoveUp_Click(object? sender, EventArgs e)
     {
-        if (listBoxImages.SelectedIndex > 0)
+        if (listBoxFiles.SelectedIndex > 0)
         {
-            int index = listBoxImages.SelectedIndex;
+            int index = listBoxFiles.SelectedIndex;
             SwapItems(index, index - 1);
-            listBoxImages.SelectedIndex = index - 1;
+            listBoxFiles.SelectedIndex = index - 1;
         }
     }
 
     private void BtnMoveDown_Click(object? sender, EventArgs e)
     {
-        if (listBoxImages.SelectedIndex >= 0 && listBoxImages.SelectedIndex < listBoxImages.Items.Count - 1)
+        if (listBoxFiles.SelectedIndex >= 0 && listBoxFiles.SelectedIndex < listBoxFiles.Items.Count - 1)
         {
-            int index = listBoxImages.SelectedIndex;
+            int index = listBoxFiles.SelectedIndex;
             SwapItems(index, index + 1);
-            listBoxImages.SelectedIndex = index + 1;
+            listBoxFiles.SelectedIndex = index + 1;
         }
     }
 
     private void SwapItems(int index1, int index2)
     {
-        (imagePaths[index1], imagePaths[index2]) = (imagePaths[index2], imagePaths[index1]);
+        (filePaths[index1], filePaths[index2]) = (filePaths[index2], filePaths[index1]);
 
-        var temp = listBoxImages.Items[index1];
-        listBoxImages.Items[index1] = listBoxImages.Items[index2];
-        listBoxImages.Items[index2] = temp;
+        var temp = listBoxFiles.Items[index1];
+        listBoxFiles.Items[index1] = listBoxFiles.Items[index2];
+        listBoxFiles.Items[index2] = temp;
     }
 
     private void BtnClear_Click(object? sender, EventArgs e)
     {
-        imagePaths.Clear();
-        listBoxImages.Items.Clear();
+        filePaths.Clear();
+        listBoxFiles.Items.Clear();
         UpdateTitle();
     }
 
     private void UpdateTitle()
     {
-        this.Text = $"Image to PDF Converter - {imagePaths.Count} image(s)";
+        this.Text = $"PDF Merger - {filePaths.Count} fichier(s)";
     }
 
     private async void BtnConvert_Click(object? sender, EventArgs e)
     {
-        if (imagePaths.Count == 0)
+        if (filePaths.Count == 0)
         {
-            MessageBox.Show("Veuillez ajouter au moins une image.", "Aucune image",
+            MessageBox.Show("Veuillez ajouter au moins un fichier.", "Aucun fichier",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
@@ -245,7 +264,7 @@ public class MainForm : Form
             Title = "Enregistrer le PDF",
             Filter = "PDF|*.pdf",
             DefaultExt = "pdf",
-            FileName = "images.pdf"
+            FileName = "merged.pdf"
         };
 
         if (saveDialog.ShowDialog() != DialogResult.OK)
@@ -253,7 +272,7 @@ public class MainForm : Form
 
         progressBar.Visible = true;
         progressBar.Value = 0;
-        progressBar.Maximum = imagePaths.Count;
+        progressBar.Maximum = filePaths.Count;
         SetButtonsEnabled(false);
 
         try
@@ -277,7 +296,7 @@ public class MainForm : Form
 
     private void SetButtonsEnabled(bool enabled)
     {
-        btnAddImages.Enabled = enabled;
+        btnAddFiles.Enabled = enabled;
         btnRemoveSelected.Enabled = enabled;
         btnMoveUp.Enabled = enabled;
         btnMoveDown.Enabled = enabled;
@@ -288,33 +307,34 @@ public class MainForm : Form
     private void CreatePdf(string outputPath)
     {
         using var document = new PdfDocument();
-        document.Info.Title = "Images converties en PDF";
-        document.Info.Creator = "Image to PDF Converter";
+        document.Info.Title = "Document fusionné";
+        document.Info.Creator = "PDF Merger";
 
-        for (int i = 0; i < imagePaths.Count; i++)
+        for (int i = 0; i < filePaths.Count; i++)
         {
-            var imagePath = imagePaths[i];
+            var filePath = filePaths[i];
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
             try
             {
-                using var stream = File.OpenRead(imagePath);
-                var image = XImage.FromStream(() => stream);
-
-                // Créer une page avec la taille de l'image
-                var page = document.AddPage();
-                page.Width = XUnit.FromPoint(image.PointWidth);
-                page.Height = XUnit.FromPoint(image.PointHeight);
-
-                using var gfx = XGraphics.FromPdfPage(page);
-                gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+                if (ImageExtensions.Contains(ext))
+                {
+                    AddImageToPdf(document, filePath);
+                }
+                else if (PdfExtensions.Contains(ext))
+                {
+                    AddPdfToPdf(document, filePath);
+                }
+                else if (MarkdownExtensions.Contains(ext))
+                {
+                    AddMarkdownToPdf(document, filePath);
+                }
             }
             catch (Exception ex)
             {
-                // Log l'erreur mais continue avec les autres images
-                System.Diagnostics.Debug.WriteLine($"Erreur avec {imagePath}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Erreur avec {filePath}: {ex.Message}");
             }
 
-            // Mettre à jour la barre de progression
             this.Invoke(() =>
             {
                 progressBar.Value = i + 1;
@@ -322,5 +342,111 @@ public class MainForm : Form
         }
 
         document.Save(outputPath);
+    }
+
+    private static void AddImageToPdf(PdfDocument document, string imagePath)
+    {
+        using var stream = File.OpenRead(imagePath);
+        var image = XImage.FromStream(() => stream);
+
+        var page = document.AddPage();
+        page.Width = XUnit.FromPoint(image.PointWidth);
+        page.Height = XUnit.FromPoint(image.PointHeight);
+
+        using var gfx = XGraphics.FromPdfPage(page);
+        gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+    }
+
+    private static void AddPdfToPdf(PdfDocument document, string pdfPath)
+    {
+        using var inputDocument = PdfReader.Open(pdfPath, PdfDocumentOpenMode.Import);
+
+        for (int i = 0; i < inputDocument.PageCount; i++)
+        {
+            var page = inputDocument.Pages[i];
+            document.AddPage(page);
+        }
+    }
+
+    private static void AddMarkdownToPdf(PdfDocument document, string markdownPath)
+    {
+        var markdownContent = File.ReadAllText(markdownPath);
+        var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+        var plainText = Markdown.ToPlainText(markdownContent, pipeline);
+
+        var page = document.AddPage();
+        page.Size = PdfSharpCore.PageSize.A4;
+
+        using var gfx = XGraphics.FromPdfPage(page);
+        var font = new XFont("Arial", 11);
+        var titleFont = new XFont("Arial", 16, XFontStyle.Bold);
+
+        double margin = 50;
+        double y = margin;
+        double lineHeight = 16;
+        double maxWidth = page.Width - (2 * margin);
+
+        // Titre du fichier
+        var fileName = Path.GetFileNameWithoutExtension(markdownPath);
+        gfx.DrawString(fileName, titleFont, XBrushes.Black, margin, y);
+        y += 30;
+
+        // Contenu
+        var lines = plainText.Split('\n');
+        foreach (var line in lines)
+        {
+            if (y > page.Height - margin)
+            {
+                page = document.AddPage();
+                page.Size = PdfSharpCore.PageSize.A4;
+                gfx.Dispose();
+                var newGfx = XGraphics.FromPdfPage(page);
+                y = margin;
+                DrawTextLine(newGfx, line.Trim(), font, margin, ref y, lineHeight, maxWidth, page.Height - margin);
+                newGfx.Dispose();
+            }
+            else
+            {
+                DrawTextLine(gfx, line.Trim(), font, margin, ref y, lineHeight, maxWidth, page.Height - margin);
+            }
+        }
+    }
+
+    private static void DrawTextLine(XGraphics gfx, string text, XFont font, double x, ref double y, double lineHeight, double maxWidth, double maxY)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            y += lineHeight / 2;
+            return;
+        }
+
+        var words = text.Split(' ');
+        var currentLine = "";
+
+        foreach (var word in words)
+        {
+            var testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+            var size = gfx.MeasureString(testLine, font);
+
+            if (size.Width > maxWidth && !string.IsNullOrEmpty(currentLine))
+            {
+                gfx.DrawString(currentLine, font, XBrushes.Black, x, y);
+                y += lineHeight;
+                currentLine = word;
+
+                if (y > maxY)
+                    return;
+            }
+            else
+            {
+                currentLine = testLine;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(currentLine))
+        {
+            gfx.DrawString(currentLine, font, XBrushes.Black, x, y);
+            y += lineHeight;
+        }
     }
 }

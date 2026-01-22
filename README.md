@@ -1,16 +1,20 @@
-# Image to PDF Converter
+# PDF Merger
 
-Application Windows permettant de convertir une ou plusieurs images en un fichier PDF.
+Application Windows permettant de fusionner des images, fichiers PDF et documents Markdown en un seul fichier PDF.
 
 ## Fonctionnalités
 
-- Sélection multiple d'images via le dialogue de fichiers
-- Glisser-déposer (drag & drop) des images directement dans la fenêtre
-- Formats supportés : JPG, JPEG, PNG, BMP, GIF, TIFF
-- Réorganisation des images (monter/descendre dans la liste)
-- Suppression d'images individuelles ou de la sélection
+- **Images** : JPG, JPEG, PNG, BMP, GIF, TIFF
+- **PDF** : Fusion de documents PDF existants (toutes les pages sont importées)
+- **Markdown** : Conversion des fichiers .md en pages PDF
+
+### Interface
+
+- Sélection multiple de fichiers via le dialogue de fichiers
+- Glisser-déposer (drag & drop) directement dans la fenêtre
+- Réorganisation des fichiers (monter/descendre dans la liste)
+- Indicateur de type de fichier [IMG], [PDF], [MD]
 - Barre de progression pendant la conversion
-- Chaque image devient une page du PDF (taille adaptée à l'image)
 
 ## Prérequis
 
@@ -26,11 +30,9 @@ Application Windows permettant de convertir une ou plusieurs images en un fichie
 
 ## Installation
 
-### Option 1 : Utiliser le binaire précompilé
+### Option 1 : Télécharger le binaire
 
-1. Téléchargez le contenu du dossier `publish/`
-2. Copiez tous les fichiers sur votre machine Windows
-3. Double-cliquez sur `ImageToPdf.exe`
+Téléchargez la dernière version depuis la page [Releases](https://github.com/phuetz/ImageToPdf/releases).
 
 ### Option 2 : Compiler depuis les sources
 
@@ -40,25 +42,30 @@ dotnet restore
 dotnet build -c Release
 ```
 
-L'exécutable sera dans `bin/Release/net8.0-windows/`.
-
 ### Option 3 : Créer un exécutable autonome
 
 ```bash
 cd ImageToPdf
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ../publish
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 ```
 
 ## Utilisation
 
-1. Lancez `ImageToPdf.exe`
-2. Ajoutez des images :
-   - Cliquez sur **"Ajouter images..."** pour ouvrir le dialogue de sélection
-   - Ou glissez-déposez des images directement dans la fenêtre
-3. Organisez l'ordre des images avec les boutons **"Monter"** et **"Descendre"**
-4. Cliquez sur **"Convertir en PDF"**
-5. Choisissez l'emplacement et le nom du fichier PDF
-6. Le PDF est généré avec une page par image
+1. Lancez l'application
+2. Ajoutez des fichiers :
+   - Cliquez sur **"Ajouter fichiers..."** pour ouvrir le dialogue de sélection
+   - Ou glissez-déposez des fichiers directement dans la fenêtre
+3. Organisez l'ordre des fichiers avec les boutons **"Monter"** et **"Descendre"**
+4. Cliquez sur **"Créer le PDF"**
+5. Choisissez l'emplacement et le nom du fichier PDF de sortie
+
+### Comportement par type de fichier
+
+| Type | Comportement |
+|------|-------------|
+| Image | Une page par image, taille adaptée à l'image |
+| PDF | Toutes les pages du PDF sont importées |
+| Markdown | Converti en texte, rendu sur pages A4 |
 
 ## Structure du projet
 
@@ -73,14 +80,13 @@ ImageToPdf/
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore) | 1.3.65 | Bibliothèque de génération PDF cross-platform |
+| [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore) | 1.3.65 | Génération et manipulation de PDF |
+| [Markdig](https://github.com/xoofx/markdig) | 0.37.0 | Parser Markdown |
 
 ## Compilation cross-platform (depuis Linux/WSL)
 
-Pour compiler depuis Linux ou WSL pour Windows :
-
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 ```
 
 ## Licence
