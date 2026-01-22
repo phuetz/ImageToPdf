@@ -47,6 +47,16 @@ public class MainForm : Form
     private List<string> filePaths = new();
     private bool previewVisible = false;
 
+    // Pro features UI
+    private CheckBox chkPageNumbers = null!;
+    private ComboBox cmbPageNumberPosition = null!;
+    private CheckBox chkWatermark = null!;
+    private TextBox txtWatermark = null!;
+    private TrackBar trackWatermarkOpacity = null!;
+    private ComboBox cmbPageFormat = null!;
+    private TrackBar trackImageQuality = null!;
+    private Label lblQualityValue = null!;
+
     private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
     private static readonly string[] PdfExtensions = { ".pdf" };
     private static readonly string[] MarkdownExtensions = { ".md", ".markdown" };
@@ -62,11 +72,12 @@ public class MainForm : Form
 
     private void InitializeComponent()
     {
-        this.Text = "PDF Merger Standard";
+        this.Text = "PDF Merger Pro";
         this.Size = new Size(650, 550);
         this.MinimumSize = new Size(550, 450);
         this.StartPosition = FormStartPosition.CenterScreen;
 
+        InitializeProSettings();
         CreateMenuStrip();
         CreateImageList();
         CreatePreviewPanel();
@@ -116,6 +127,61 @@ public class MainForm : Form
         toolsMenu.DropDownItems.Add(openPdfSamItem);
 
         menuStrip.Items.Add(toolsMenu);
+
+        // Menu Options (Pro)
+        var optionsMenu = new ToolStripMenuItem("Options Pro");
+
+        var settingsItem = new ToolStripMenuItem("Paramètres du PDF...", null, ShowSettings_Click)
+        {
+            ShortcutKeys = Keys.Control | Keys.O
+        };
+
+        optionsMenu.DropDownItems.Add(settingsItem);
+        menuStrip.Items.Add(optionsMenu);
+    }
+
+    private void ShowSettings_Click(object? sender, EventArgs e)
+    {
+        using var settingsForm = new SettingsForm(
+            chkPageNumbers.Checked,
+            cmbPageNumberPosition.SelectedIndex,
+            chkWatermark.Checked,
+            txtWatermark.Text,
+            trackWatermarkOpacity.Value,
+            cmbPageFormat.SelectedIndex,
+            trackImageQuality.Value);
+
+        if (settingsForm.ShowDialog() == DialogResult.OK)
+        {
+            chkPageNumbers.Checked = settingsForm.PageNumbersEnabled;
+            cmbPageNumberPosition.SelectedIndex = settingsForm.PageNumberPosition;
+            chkWatermark.Checked = settingsForm.WatermarkEnabled;
+            txtWatermark.Text = settingsForm.WatermarkText;
+            trackWatermarkOpacity.Value = settingsForm.WatermarkOpacity;
+            cmbPageFormat.SelectedIndex = settingsForm.PageFormat;
+            trackImageQuality.Value = settingsForm.ImageQuality;
+            lblQualityValue.Text = $"{trackImageQuality.Value}%";
+        }
+    }
+
+    private void InitializeProSettings()
+    {
+        // Initialiser les contrôles Pro (stockés mais pas affichés dans l'interface principale)
+        chkPageNumbers = new CheckBox { Checked = false };
+        cmbPageNumberPosition = new ComboBox();
+        cmbPageNumberPosition.Items.AddRange(new[] { "Bas - Centre", "Bas - Droite", "Haut - Centre", "Haut - Droite" });
+        cmbPageNumberPosition.SelectedIndex = 0;
+
+        chkWatermark = new CheckBox { Checked = false };
+        txtWatermark = new TextBox { Text = "" };
+        trackWatermarkOpacity = new TrackBar { Minimum = 10, Maximum = 100, Value = 30 };
+
+        cmbPageFormat = new ComboBox();
+        cmbPageFormat.Items.AddRange(new[] { "Adapter à l'image", "A4", "Letter", "A3" });
+        cmbPageFormat.SelectedIndex = 0;
+
+        trackImageQuality = new TrackBar { Minimum = 10, Maximum = 100, Value = 85 };
+        lblQualityValue = new Label { Text = "85%" };
     }
 
     private void CreateMainPanel()
@@ -698,7 +764,7 @@ public class MainForm : Form
 
     private void UpdateTitle()
     {
-        this.Text = $"PDF Merger Standard - {filePaths.Count} fichier(s)";
+        this.Text = $"PDF Merger Pro - {filePaths.Count} fichier(s)";
     }
 
     private async void BtnConvert_Click(object? sender, EventArgs e)
@@ -801,7 +867,25 @@ public class MainForm : Form
     {
         using var document = new PdfSharpDocument();
         document.Info.Title = "Document fusionné";
-        document.Info.Creator = "PDF Merger";
+        document.Info.Creator = "PDF Merger Pro";
+
+        // Récupérer les paramètres Pro
+        bool addPageNumbers = false;
+        int pageNumPosition = 0;
+        bool addWatermark = false;
+        string watermarkText = "";
+        int watermarkOpacity = 30;
+        int pageFormat = 0;
+
+        this.Invoke(() =>
+        {
+            addPageNumbers = chkPageNumbers.Checked;
+            pageNumPosition = cmbPageNumberPosition.SelectedIndex;
+            addWatermark = chkWatermark.Checked;
+            watermarkText = txtWatermark.Text;
+            watermarkOpacity = trackWatermarkOpacity.Value;
+            pageFormat = cmbPageFormat.SelectedIndex;
+        });
 
         for (int i = 0; i < filePaths.Count; i++)
         {
@@ -812,7 +896,7 @@ public class MainForm : Form
             {
                 if (ImageExtensions.Contains(ext))
                 {
-                    AddImageToPdf(document, filePath);
+                    AddImageToPdf(document, filePath, pageFormat);
                 }
                 else if (PdfExtensions.Contains(ext))
                 {
@@ -834,20 +918,127 @@ public class MainForm : Form
             });
         }
 
+        // Appliquer filigrane et numéros de page sur toutes les pages
+        ApplyProFeatures(document, addPageNumbers, pageNumPosition, addWatermark, watermarkText, watermarkOpacity);
+
         document.Save(outputPath);
     }
 
-    private static void AddImageToPdf(PdfSharpDocument document, string imagePath)
+    private static void ApplyProFeatures(PdfSharpDocument document, bool addPageNumbers, int pageNumPosition,
+        bool addWatermark, string watermarkText, int watermarkOpacity)
+    {
+        if (!addPageNumbers && !addWatermark)
+            return;
+
+        var totalPages = document.PageCount;
+        for (int i = 0; i < totalPages; i++)
+        {
+            var page = document.Pages[i];
+            using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Append);
+
+            // Filigrane
+            if (addWatermark && !string.IsNullOrWhiteSpace(watermarkText))
+            {
+                var watermarkFont = new XFont("Arial", 60, XFontStyle.Bold);
+                var watermarkBrush = new XSolidBrush(XColor.FromArgb(watermarkOpacity * 255 / 100, 128, 128, 128));
+
+                var state = gfx.Save();
+                gfx.TranslateTransform(page.Width / 2, page.Height / 2);
+                gfx.RotateTransform(-45);
+
+                var size = gfx.MeasureString(watermarkText, watermarkFont);
+                gfx.DrawString(watermarkText, watermarkFont, watermarkBrush,
+                    new XRect(-size.Width / 2, -size.Height / 2, size.Width, size.Height),
+                    XStringFormats.Center);
+
+                gfx.Restore(state);
+            }
+
+            // Numéros de page
+            if (addPageNumbers)
+            {
+                var pageNumFont = new XFont("Arial", 10);
+                var pageText = $"Page {i + 1} / {totalPages}";
+                var textSize = gfx.MeasureString(pageText, pageNumFont);
+
+                double x, y;
+                switch (pageNumPosition)
+                {
+                    case 0: // Bas - Centre
+                        x = (page.Width - textSize.Width) / 2;
+                        y = page.Height - 30;
+                        break;
+                    case 1: // Bas - Droite
+                        x = page.Width - textSize.Width - 30;
+                        y = page.Height - 30;
+                        break;
+                    case 2: // Haut - Centre
+                        x = (page.Width - textSize.Width) / 2;
+                        y = 30;
+                        break;
+                    case 3: // Haut - Droite
+                        x = page.Width - textSize.Width - 30;
+                        y = 30;
+                        break;
+                    default:
+                        x = (page.Width - textSize.Width) / 2;
+                        y = page.Height - 30;
+                        break;
+                }
+
+                gfx.DrawString(pageText, pageNumFont, XBrushes.Black, x, y);
+            }
+        }
+    }
+
+    private static void AddImageToPdf(PdfSharpDocument document, string imagePath, int pageFormat = 0)
     {
         using var stream = File.OpenRead(imagePath);
         var image = XImage.FromStream(() => stream);
 
         var page = document.AddPage();
-        page.Width = XUnit.FromPoint(image.PointWidth);
-        page.Height = XUnit.FromPoint(image.PointHeight);
+
+        // Appliquer le format de page selon l'option Pro
+        switch (pageFormat)
+        {
+            case 0: // Adapter à l'image
+                page.Width = XUnit.FromPoint(image.PointWidth);
+                page.Height = XUnit.FromPoint(image.PointHeight);
+                break;
+            case 1: // A4
+                page.Size = PdfSharpCore.PageSize.A4;
+                break;
+            case 2: // Letter
+                page.Size = PdfSharpCore.PageSize.Letter;
+                break;
+            case 3: // A3
+                page.Size = PdfSharpCore.PageSize.A3;
+                break;
+        }
 
         using var gfx = XGraphics.FromPdfPage(page);
-        gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+
+        if (pageFormat == 0)
+        {
+            // Image pleine page
+            gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+        }
+        else
+        {
+            // Centrer et adapter l'image dans la page avec marges
+            double margin = 30;
+            double availableWidth = page.Width.Point - 2 * margin;
+            double availableHeight = page.Height.Point - 2 * margin;
+
+            double scale = Math.Min(availableWidth / image.PointWidth, availableHeight / image.PointHeight);
+            double imgWidth = image.PointWidth * scale;
+            double imgHeight = image.PointHeight * scale;
+
+            double x = (page.Width.Point - imgWidth) / 2;
+            double y = (page.Height.Point - imgHeight) / 2;
+
+            gfx.DrawImage(image, x, y, imgWidth, imgHeight);
+        }
     }
 
     private static void AddPdfToPdf(PdfSharpDocument document, string pdfPath)
