@@ -12,8 +12,9 @@ PDF Merger est disponible en trois éditions :
 | Fusion de fichiers PDF | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Glisser-déposer | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Réorganisation des fichiers | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Mode ligne de commande | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Support Markdown | :x: | :white_check_mark: | :white_check_mark: |
-| Panneau d'aperçu | :x: | :white_check_mark: | :white_check_mark: |
+| Panneau d'aperçu avec zoom | :x: | :white_check_mark: | :white_check_mark: |
 | Conversion PDF → Word | :x: | :white_check_mark: | :white_check_mark: |
 | Intégration PDFsam | :x: | :white_check_mark: | :white_check_mark: |
 | Numérotation des pages | :x: | :x: | :white_check_mark: |
@@ -29,18 +30,67 @@ PDF Merger est disponible en trois éditions :
 
 ## Fonctionnalités
 
+### Formats supportés
+
 - **Images** : JPG, JPEG, PNG, BMP, GIF, TIFF
 - **PDF** : Fusion de documents PDF existants (toutes les pages sont importées)
 - **Markdown** : Conversion des fichiers .md en pages PDF (Standard et Pro)
 
-### Interface
+### Interface style Windows Explorer
 
-- Sélection multiple de fichiers via le dialogue de fichiers
-- Glisser-déposer (drag & drop) directement dans la fenêtre
-- Réorganisation des fichiers (monter/descendre dans la liste)
-- Icônes de type de fichier (image, PDF, Markdown)
-- Barre de progression pendant la conversion
-- Panneau d'aperçu (Standard et Pro)
+- Barre d'outils Windows 11 avec icônes 24x24
+- **7 modes d'affichage** : Très grandes icônes, Grandes icônes, Icônes moyennes, Petites icônes, Liste, Détails, Mosaïque
+- Miniatures dynamiques pour les images et types de fichiers
+- Tri par colonnes (nom, type, date de modification)
+- Panneau divisible avec splitter redimensionnable
+
+### Aperçu de fichiers
+
+- Aperçu des images en temps réel
+- **Navigation multi-pages** pour les PDF (boutons précédent/suivant)
+- **Zoom** de 25% à 200%
+- Aperçu du contenu Markdown
+
+### Historique et raccourcis
+
+- **Fichiers récents** : Accès rapide aux derniers PDF créés
+- **Raccourcis clavier** :
+  - `Ctrl+O` : Ajouter des fichiers
+  - `Ctrl+S` : Créer le PDF
+  - `Ctrl+P` : Afficher/masquer l'aperçu
+  - `Suppr` : Supprimer la sélection
+  - `F5` : Aperçu du résultat
+
+## Mode ligne de commande
+
+PDF Merger peut être utilisé en ligne de commande pour l'automatisation :
+
+```bash
+# Afficher l'aide
+ImageToPdf.exe --help
+
+# Fusionner des fichiers (dernier argument = fichier de sortie)
+ImageToPdf.exe image1.jpg image2.png document.pdf resultat.pdf
+
+# Spécifier le fichier de sortie avec -o
+ImageToPdf.exe -o resultat.pdf image1.jpg image2.png
+
+# Mode verbose pour voir le détail du traitement
+ImageToPdf.exe -v -o merged.pdf doc1.pdf doc2.pdf
+
+# Utiliser des wildcards
+ImageToPdf.exe -o rapport.pdf C:\images\*.png C:\docs\*.pdf
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output <fichier>` | Spécifier le fichier PDF de sortie |
+| `-v, --verbose` | Afficher les détails du traitement |
+| `-h, --help` | Afficher l'aide |
+
+Sans argument, l'interface graphique est lancée.
 
 ## Prérequis
 
@@ -75,15 +125,17 @@ cd ImageToPdf
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 ```
 
-## Utilisation
+## Utilisation (Interface graphique)
 
-1. Lancez l'application
+1. Lancez l'application (double-clic ou sans arguments en ligne de commande)
 2. Ajoutez des fichiers :
-   - Cliquez sur **"Ajouter fichiers..."** pour ouvrir le dialogue de sélection
+   - Cliquez sur **"Nouveau"** pour ouvrir le dialogue de sélection
    - Ou glissez-déposez des fichiers directement dans la fenêtre
-3. Organisez l'ordre des fichiers avec les boutons **"Monter"** et **"Descendre"**
-4. Cliquez sur **"Créer le PDF"**
-5. Choisissez l'emplacement et le nom du fichier PDF de sortie
+3. Changez le mode d'affichage via le menu **"Affichage"**
+4. Organisez l'ordre des fichiers avec les boutons **↑** et **↓**
+5. Utilisez le panneau d'aperçu pour visualiser les fichiers
+6. Cliquez sur **"Aperçu"** pour voir le résultat final
+7. Cliquez sur **"Créer PDF"** pour générer le fichier
 
 ### Comportement par type de fichier
 
@@ -98,8 +150,9 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 ```
 ImageToPdf/
 ├── ImageToPdf.csproj    # Fichier projet .NET
-├── Program.cs           # Point d'entrée de l'application
-└── MainForm.cs          # Interface utilisateur et logique de conversion
+├── Program.cs           # Point d'entrée et mode ligne de commande
+├── MainForm.cs          # Interface utilisateur
+└── PdfMerger.cs         # Logique de création PDF (partagée GUI/CLI)
 ```
 
 ## Dépendances
@@ -108,6 +161,8 @@ ImageToPdf/
 |---------|---------|-------------|
 | [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore) | 1.3.65 | Génération et manipulation de PDF |
 | [Markdig](https://github.com/xoofx/markdig) | 0.37.0 | Parser Markdown |
+| [DocumentFormat.OpenXml](https://github.com/dotnet/Open-XML-SDK) | 3.0.2 | Conversion PDF → Word |
+| [iText7](https://github.com/itext/itext7-dotnet) | 8.0.2 | Extraction de texte PDF |
 
 ## Compilation cross-platform (depuis Linux/WSL)
 
