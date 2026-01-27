@@ -291,6 +291,97 @@ public class MainForm : Form
         toolStrip.Items.Add(new ToolStripSeparator());
         toolStrip.Items.Add(btnPreviewResult);
         toolStrip.Items.Add(btnConvert);
+
+        // Bouton Aide
+        var btnHelp = CreateCommandButton("?", CreateHelpIcon24(), "Aide");
+        btnHelp.Click += BtnHelp_Click;
+        toolStrip.Items.Add(new ToolStripSeparator());
+        toolStrip.Items.Add(btnHelp);
+    }
+
+    private static Bitmap CreateHelpIcon24()
+    {
+        var bmp = new Bitmap(24, 24);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
+        using var pen = new Pen(Color.FromArgb(0, 120, 212), 2f);
+        g.DrawEllipse(pen, 4, 4, 16, 16);
+        using var font = new Font("Segoe UI", 10, FontStyle.Bold);
+        using var brush = new SolidBrush(Color.FromArgb(0, 120, 212));
+        g.DrawString("?", font, brush, 7, 4);
+        return bmp;
+    }
+
+    private void BtnHelp_Click(object? sender, EventArgs e)
+    {
+        var helpText = @"PDF Merger - Aide
+
+UTILISATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Cliquez sur « Ajouter » ou glissez-déposez des fichiers
+2. Réorganisez l'ordre avec les boutons ↑ et ↓
+3. Cliquez sur « Créer PDF » pour générer le fichier
+
+FORMATS SUPPORTÉS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Images : JPG, PNG, BMP, GIF, TIFF
+• Documents : PDF
+• Texte : Markdown (.md)
+
+RACCOURCIS CLAVIER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ctrl+O     Ajouter des fichiers
+Ctrl+S     Créer le PDF
+Ctrl+P     Afficher/masquer l'aperçu
+Suppr      Supprimer la sélection
+F5         Aperçu du résultat
+
+LIGNE DE COMMANDE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ImageToPdf.exe [fichiers...] sortie.pdf
+ImageToPdf.exe -o sortie.pdf fichiers...
+ImageToPdf.exe --help
+
+Version 2.8.0
+";
+
+        using var helpForm = new Form
+        {
+            Text = "Aide - PDF Merger",
+            Size = new Size(450, 500),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = Color.White
+        };
+
+        var textBox = new RichTextBox
+        {
+            Dock = DockStyle.Fill,
+            Text = helpText,
+            ReadOnly = true,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Consolas", 9.5f),
+            BackColor = Color.White,
+            Margin = new Padding(10)
+        };
+
+        var btnClose = new Button
+        {
+            Text = "Fermer",
+            Dock = DockStyle.Bottom,
+            Height = 35,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(0, 120, 212),
+            ForeColor = Color.White
+        };
+        btnClose.Click += (s, ev) => helpForm.Close();
+
+        helpForm.Controls.Add(textBox);
+        helpForm.Controls.Add(btnClose);
+        helpForm.ShowDialog(this);
     }
 
     private void SetViewMode(View view, int iconSize)
