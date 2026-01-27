@@ -55,9 +55,9 @@ jobs:
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
-          project-slug: 'pdf-merger'
+          project-slug: 'ImageToPdf'
           signing-policy-slug: 'release-signing'
-          artifact-configuration-slug: 'exe'
+          artifact-configuration-slug: 'portable-executable'
           github-artifact-id: 'unsigned-exe'
           wait-for-completion: true
           output-artifact-directory: './signed'
