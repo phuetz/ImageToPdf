@@ -63,6 +63,11 @@ public class MainForm : Form
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "PDFMerger", "recent.txt");
 
+    // Configuration
+    private static readonly string ConfigFilePath = Path.Combine(
+        AppContext.BaseDirectory, "pdfmerger.conf");
+    private bool toolsEnabled = false;
+
     // Tri
     private int sortColumn = -1;
     private SortOrder sortOrder = SortOrder.None;
@@ -80,8 +85,44 @@ public class MainForm : Form
 
     public MainForm()
     {
+        LoadConfiguration();
         InitializeComponent();
         LoadRecentFiles();
+    }
+
+    private void LoadConfiguration()
+    {
+        toolsEnabled = false;
+
+        if (File.Exists(ConfigFilePath))
+        {
+            try
+            {
+                var lines = File.ReadAllLines(ConfigFilePath);
+                foreach (var line in lines)
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.StartsWith("#") || string.IsNullOrEmpty(trimmed))
+                        continue;
+
+                    var parts = trimmed.Split('=', 2);
+                    if (parts.Length == 2)
+                    {
+                        var key = parts[0].Trim().ToLowerInvariant();
+                        var value = parts[1].Trim().ToLowerInvariant();
+
+                        if (key == "tools_enabled" || key == "enable_tools")
+                        {
+                            toolsEnabled = value == "true" || value == "1" || value == "yes";
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                toolsEnabled = false;
+            }
+        }
     }
 
     private void InitializeComponent()
@@ -241,7 +282,13 @@ public class MainForm : Form
         toolStrip.Items.Add(btnTogglePreview);
         toolStrip.Items.Add(viewDropDown);
         toolStrip.Items.Add(new ToolStripSeparator());
-        toolStrip.Items.Add(toolsDropDown);
+
+        // Menu Outils uniquement si activé dans la configuration
+        if (toolsEnabled)
+        {
+            toolStrip.Items.Add(toolsDropDown);
+        }
+
         toolStrip.Items.Add(recentDropDown);
         toolStrip.Items.Add(new ToolStripSeparator());
         toolStrip.Items.Add(btnPreviewResult);
