@@ -406,16 +406,23 @@ Version 2.9.0
 
     private void RegenerateThumbnails(int size)
     {
-        imageListThumbnails.Images.Clear();
-        imageListThumbnails.ImageSize = new Size(size, size);
+        listViewFiles.LargeImageList = null;
+
+        imageListThumbnails.Dispose();
+        imageListThumbnails = new ImageList
+        {
+            ImageSize = new Size(size, size),
+            ColorDepth = ColorDepth.Depth32Bit
+        };
 
         for (int i = 0; i < filePaths.Count; i++)
         {
-            var thumbKey = $"thumb_{i + 1}";
             var thumb = CreateThumbnailWithSize(filePaths[i], size);
-            imageListThumbnails.Images.Add(thumbKey, thumb);
-            listViewFiles.Items[i].ImageKey = thumbKey;
+            imageListThumbnails.Images.Add(thumb);
+            listViewFiles.Items[i].ImageIndex = i;
         }
+
+        listViewFiles.LargeImageList = imageListThumbnails;
     }
 
     private Bitmap CreateThumbnailWithSize(string filePath, int size)
@@ -1428,39 +1435,88 @@ Version 2.9.0
     {
         var allValidExtensions = ImageExtensions.Concat(PdfExtensions).Concat(MarkdownExtensions).ToArray();
 
-        listViewFiles.BeginUpdate();
+        var filesToAdd = new List<string>();
         foreach (var file in files)
         {
             var ext = Path.GetExtension(file).ToLowerInvariant();
             if (allValidExtensions.Contains(ext) && !filePaths.Contains(file))
             {
-                filePaths.Add(file);
-                var (iconIndex, typeName) = GetFileTypeInfo(ext);
-
-                var fileInfo = new FileInfo(file);
-                var dateStr = fileInfo.LastWriteTime.ToString("dd/MM/yyyy HH:mm");
-
-                // Créer la miniature (grande icône)
-                var thumbKey = $"thumb_{filePaths.Count}";
-                var thumb = CreateThumbnail(file);
-                imageListThumbnails.Images.Add(thumbKey, thumb);
-
-                // Créer aussi la petite icône avec la même clé
-                var smallIcon = CreateSmallIcon(ext);
-                imageListIcons.Images.Add(thumbKey, smallIcon);
-
-                var item = new ListViewItem(Path.GetFileName(file))
-                {
-                    ImageKey = thumbKey
-                };
-                item.SubItems.Add(typeName);
-                item.SubItems.Add(dateStr);
-                listViewFiles.Items.Add(item);
+                filesToAdd.Add(file);
             }
         }
-        listViewFiles.EndUpdate();
+
+        if (filesToAdd.Count == 0) return;
+
+        // Ajouter les fichiers à la liste
+        foreach (var file in filesToAdd)
+        {
+            filePaths.Add(file);
+        }
+
+        // Reconstruire complètement les ImageLists et la ListView
+        RebuildFileList();
 
         UpdateTitle();
+    }
+
+    private void RebuildFileList()
+    {
+        listViewFiles.BeginUpdate();
+
+        // Détacher les ImageLists
+        listViewFiles.SmallImageList = null;
+        listViewFiles.LargeImageList = null;
+
+        // Recréer les ImageLists complètement
+        var thumbSize = imageListThumbnails.ImageSize;
+
+        imageListThumbnails.Dispose();
+        imageListThumbnails = new ImageList
+        {
+            ImageSize = thumbSize,
+            ColorDepth = ColorDepth.Depth32Bit
+        };
+
+        imageListIcons.Dispose();
+        imageListIcons = new ImageList
+        {
+            ImageSize = new Size(20, 20),
+            ColorDepth = ColorDepth.Depth32Bit
+        };
+
+        // Reconstruire la liste
+        listViewFiles.Items.Clear();
+
+        for (int i = 0; i < filePaths.Count; i++)
+        {
+            var file = filePaths[i];
+            var ext = Path.GetExtension(file).ToLowerInvariant();
+            var (iconIndex, typeName) = GetFileTypeInfo(ext);
+
+            var fileInfo = new FileInfo(file);
+            var dateStr = fileInfo.LastWriteTime.ToString("dd/MM/yyyy HH:mm");
+
+            // Ajouter miniature et petite icône au même index
+            var thumb = CreateThumbnail(file);
+            imageListThumbnails.Images.Add(thumb);
+
+            var smallIcon = CreateSmallIcon(ext);
+            imageListIcons.Images.Add(smallIcon);
+
+            var item = new ListViewItem(Path.GetFileName(file))
+            {
+                ImageIndex = i
+            };
+            item.SubItems.Add(typeName);
+            item.SubItems.Add(dateStr);
+            listViewFiles.Items.Add(item);
+        }
+
+        // Réattacher les ImageLists
+        listViewFiles.SmallImageList = imageListIcons;
+        listViewFiles.LargeImageList = imageListThumbnails;
+
+        listViewFiles.EndUpdate();
     }
 
     private Bitmap CreateSmallIcon(string extension)
@@ -1485,11 +1541,14 @@ Version 2.9.0
     private void BtnRemoveSelected_Click(object? sender, EventArgs e)
     {
         var indices = listViewFiles.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
+        if (indices.Count == 0) return;
+
         foreach (var index in indices)
         {
             filePaths.RemoveAt(index);
-            listViewFiles.Items.RemoveAt(index);
         }
+
+        RebuildFileList();
         UpdateTitle();
         UpdatePreview();
     }
@@ -1499,8 +1558,8 @@ Version 2.9.0
         if (listViewFiles.SelectedIndices.Count > 0 && listViewFiles.SelectedIndices[0] > 0)
         {
             int index = listViewFiles.SelectedIndices[0];
-            SwapItems(index, index - 1);
-            listViewFiles.Items[index].Selected = false;
+            (filePaths[index], filePaths[index - 1]) = (filePaths[index - 1], filePaths[index]);
+            RebuildFileList();
             listViewFiles.Items[index - 1].Selected = true;
             listViewFiles.Items[index - 1].Focused = true;
             listViewFiles.Focus();
@@ -1513,8 +1572,8 @@ Version 2.9.0
         if (listViewFiles.SelectedIndices.Count > 0 && listViewFiles.SelectedIndices[0] < listViewFiles.Items.Count - 1)
         {
             int index = listViewFiles.SelectedIndices[0];
-            SwapItems(index, index + 1);
-            listViewFiles.Items[index].Selected = false;
+            (filePaths[index], filePaths[index + 1]) = (filePaths[index + 1], filePaths[index]);
+            RebuildFileList();
             listViewFiles.Items[index + 1].Selected = true;
             listViewFiles.Items[index + 1].Focused = true;
             listViewFiles.Focus();
@@ -1522,41 +1581,10 @@ Version 2.9.0
         }
     }
 
-    private void SwapItems(int index1, int index2)
-    {
-        (filePaths[index1], filePaths[index2]) = (filePaths[index2], filePaths[index1]);
-
-        var item1 = listViewFiles.Items[index1];
-        var item2 = listViewFiles.Items[index2];
-
-        var text1 = item1.Text;
-        var sub1 = item1.SubItems[1].Text;
-        var date1 = item1.SubItems[2].Text;
-        var iconKey1 = item1.ImageKey;
-
-        item1.Text = item2.Text;
-        item1.SubItems[1].Text = item2.SubItems[1].Text;
-        item1.SubItems[2].Text = item2.SubItems[2].Text;
-        item1.ImageKey = item2.ImageKey;
-
-        item2.Text = text1;
-        item2.SubItems[1].Text = sub1;
-        item2.SubItems[2].Text = date1;
-        item2.ImageKey = iconKey1;
-    }
-
     private void BtnClear_Click(object? sender, EventArgs e)
     {
         filePaths.Clear();
-        listViewFiles.Items.Clear();
-        imageListThumbnails.Images.Clear();
-        // Garder les icônes de base mais supprimer les icônes dynamiques
-        var keysToRemove = imageListIcons.Images.Keys.Cast<string>()
-            .Where(k => k.StartsWith("thumb_")).ToList();
-        foreach (var key in keysToRemove)
-        {
-            imageListIcons.Images.RemoveByKey(key);
-        }
+        RebuildFileList();
         UpdateTitle();
         UpdatePreview();
     }
