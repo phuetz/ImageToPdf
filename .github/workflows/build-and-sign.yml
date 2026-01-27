@@ -13,6 +13,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      artifact-id: ${{ steps.upload-unsigned-artifact.outputs.artifact-id }}
 
     steps:
       - name: Checkout code
@@ -34,6 +36,7 @@ jobs:
           dotnet publish ImageToPdf/ImageToPdf.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o ./publish
 
       - name: Upload unsigned artifact
+        id: upload-unsigned-artifact
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-exe
@@ -44,12 +47,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download unsigned artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: unsigned-exe
-          path: ./unsigned
-
       - name: Sign with SignPath
         uses: signpath/github-action-submit-signing-request@v2
         with:
@@ -58,7 +55,7 @@ jobs:
           project-slug: 'ImageToPdf'
           signing-policy-slug: 'release-signing'
           artifact-configuration-slug: 'initial'
-          github-artifact-id: 'unsigned-exe'
+          github-artifact-id: '${{ needs.build.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: './signed'
 
