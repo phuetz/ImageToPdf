@@ -1,0 +1,104 @@
+name: Build and Sign Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (ex: 2.9.2)'
+        required: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore ImageToPdf/ImageToPdf.csproj
+
+      - name: Build
+        run: dotnet build ImageToPdf/ImageToPdf.csproj -c Release --no-restore
+
+      - name: Publish
+        run: |
+          dotnet publish ImageToPdf/ImageToPdf.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o ./publish
+
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: ./publish/ImageToPdf.exe
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download unsigned artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: unsigned-exe
+          path: ./unsigned
+
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
+          project-slug: 'pdf-merger'
+          signing-policy-slug: 'release-signing'
+          artifact-configuration-slug: 'exe'
+          github-artifact-id: 'unsigned-exe'
+          wait-for-completion: true
+          output-artifact-directory: './signed'
+
+      - name: Upload signed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-exe
+          path: ./signed/ImageToPdf.exe
+
+  release:
+    needs: sign
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download signed artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-exe
+          path: ./signed
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create ZIP
+        run: |
+          cd signed
+          zip -j ../PDFMerger-${{ steps.version.outputs.VERSION }}-win-x64-signed.zip ImageToPdf.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: PDFMerger-${{ steps.version.outputs.VERSION }}-win-x64-signed.zip
+          body: |
+            ## PDF Merger ${{ steps.version.outputs.VERSION }}
+
+            ✅ **Binaire signé** - Plus d'avertissement Windows SmartScreen
+
+            ### Installation
+            Téléchargez le ZIP, extrayez et lancez `ImageToPdf.exe`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
