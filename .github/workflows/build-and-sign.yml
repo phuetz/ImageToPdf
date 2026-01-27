@@ -57,7 +57,7 @@ jobs:
           organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
           project-slug: 'ImageToPdf'
           signing-policy-slug: 'release-signing'
-          artifact-configuration-slug: 'portable-executable'
+          artifact-configuration-slug: 'initial'
           github-artifact-id: 'unsigned-exe'
           wait-for-completion: true
           output-artifact-directory: './signed'
