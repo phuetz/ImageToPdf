@@ -41,16 +41,13 @@ public class MainForm : Form
     private Label lblNoPreview = null!;
     private Splitter splitter = null!;
 
-    // Contrôles de navigation et zoom pour l'aperçu
+    // Contrôles de navigation pour l'aperçu
     private Panel previewControlsPanel = null!;
     private Button btnPrevPage = null!;
     private Button btnNextPage = null!;
     private Label lblPageInfo = null!;
-    private TrackBar zoomTrackBar = null!;
-    private Label lblZoom = null!;
     private int currentPreviewPage = 0;
     private int totalPreviewPages = 0;
-    private float currentZoom = 1.0f;
     private string? currentPreviewFile = null;
 
     // Miniatures
@@ -73,7 +70,7 @@ public class MainForm : Form
     private SortOrder sortOrder = SortOrder.None;
 
     private List<string> filePaths = new();
-    private bool previewVisible = false;
+    private bool previewVisible = true;
 
     private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
     private static readonly string[] PdfExtensions = { ".pdf" };
@@ -150,7 +147,7 @@ public class MainForm : Form
             BackColor = Color.FromArgb(218, 218, 218),
             MinExtra = 300,
             MinSize = 250,
-            Visible = false,
+            Visible = true,
             Cursor = Cursors.VSplit
         };
         splitter.Paint += (s, e) =>
@@ -192,7 +189,7 @@ public class MainForm : Form
         };
 
         // Style Windows 11 - boutons avec icônes 24x24
-        btnAddFiles = CreateCommandButton("Nouveau", CreateAddIcon24(), "Ajouter des fichiers");
+        btnAddFiles = CreateCommandButton("Ajouter", CreateAddIcon24(), "Ajouter des fichiers");
         btnAddFiles.Click += BtnAddFiles_Click;
 
         btnRemoveSelected = CreateCommandButton("Supprimer", CreateDeleteIcon24(), "Supprimer la sélection");
@@ -213,6 +210,7 @@ public class MainForm : Form
         btnTogglePreview = CreateCommandButton("", CreatePreviewIcon24(), "Volet de visualisation");
         btnTogglePreview.DisplayStyle = ToolStripItemDisplayStyle.Image;
         btnTogglePreview.CheckOnClick = true;
+        btnTogglePreview.Checked = true;
         btnTogglePreview.Click += BtnTogglePreview_Click;
 
         btnPreviewResult = CreateCommandButton("Aperçu", CreateViewIcon24(), "Voir le résultat");
@@ -622,7 +620,7 @@ public class MainForm : Form
 
         statusLabel = new ToolStripStatusLabel
         {
-            Text = "Glissez des fichiers ici ou cliquez sur Nouveau",
+            Text = "Glissez des fichiers ici ou cliquez sur Ajouter",
             Spring = true,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Segoe UI", 9),
@@ -659,7 +657,7 @@ public class MainForm : Form
         listViewFiles = new ListView
         {
             Dock = DockStyle.Fill,
-            View = View.Tile,
+            View = View.Details,
             FullRowSelect = true,
             SmallImageList = imageListIcons,
             LargeImageList = imageListThumbnails,
@@ -957,7 +955,7 @@ public class MainForm : Form
         {
             Dock = DockStyle.Right,
             Width = 320,
-            Visible = false,
+            Visible = true,
             BackColor = Color.FromArgb(243, 243, 243),
             Padding = new Padding(12, 8, 12, 8)
         };
@@ -971,11 +969,11 @@ public class MainForm : Form
             ForeColor = Color.FromArgb(96, 96, 96)
         };
 
-        // Panneau de contrôles (navigation + zoom)
+        // Panneau de contrôles (navigation)
         previewControlsPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 70,
+            Height = 40,
             BackColor = Color.FromArgb(243, 243, 243),
             Padding = new Padding(0, 8, 0, 0)
         };
@@ -1021,44 +1019,6 @@ public class MainForm : Form
 
         navPanel.Controls.AddRange(new Control[] { btnPrevPage, lblPageInfo, btnNextPage });
 
-        // Zoom
-        var zoomPanel = new Panel { Dock = DockStyle.Bottom, Height = 30 };
-
-        var lblZoomIcon = new Label
-        {
-            Text = "🔍",
-            Width = 24,
-            Height = 24,
-            Location = new Point(0, 3),
-            Font = new Font("Segoe UI", 10)
-        };
-
-        zoomTrackBar = new TrackBar
-        {
-            Minimum = 25,
-            Maximum = 200,
-            Value = 100,
-            TickFrequency = 25,
-            Width = 180,
-            Height = 30,
-            Location = new Point(24, 0),
-            TickStyle = TickStyle.None
-        };
-        zoomTrackBar.ValueChanged += ZoomTrackBar_ValueChanged;
-
-        lblZoom = new Label
-        {
-            Text = "100%",
-            Width = 45,
-            Height = 24,
-            Location = new Point(208, 3),
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 9)
-        };
-
-        zoomPanel.Controls.AddRange(new Control[] { lblZoomIcon, zoomTrackBar, lblZoom });
-
-        previewControlsPanel.Controls.Add(zoomPanel);
         previewControlsPanel.Controls.Add(navPanel);
 
         var previewContentPanel = new Panel
@@ -1124,21 +1084,6 @@ public class MainForm : Form
         }
     }
 
-    private void ZoomTrackBar_ValueChanged(object? sender, EventArgs e)
-    {
-        currentZoom = zoomTrackBar.Value / 100f;
-        lblZoom.Text = $"{zoomTrackBar.Value}%";
-
-        if (pictureBoxPreview.Visible && currentPreviewFile != null)
-        {
-            var ext = Path.GetExtension(currentPreviewFile).ToLowerInvariant();
-            if (PdfExtensions.Contains(ext))
-            {
-                UpdatePdfPagePreview();
-            }
-        }
-    }
-
     private async void UpdatePdfPagePreview()
     {
         if (currentPreviewFile == null) return;
@@ -1157,7 +1102,7 @@ public class MainForm : Form
                 var baseWidth = (uint)Math.Min(pictureBoxPreview.Width * 2, 800);
                 var options = new Windows.Data.Pdf.PdfPageRenderOptions
                 {
-                    DestinationWidth = (uint)(baseWidth * currentZoom),
+                    DestinationWidth = baseWidth,
                     BackgroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255)
                 };
 
@@ -1293,7 +1238,7 @@ public class MainForm : Form
                 var baseWidth = (uint)Math.Min(pictureBoxPreview.Width * 2, 800);
                 var options = new Windows.Data.Pdf.PdfPageRenderOptions
                 {
-                    DestinationWidth = (uint)(baseWidth * currentZoom),
+                    DestinationWidth = baseWidth,
                     BackgroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255)
                 };
 
@@ -1564,8 +1509,21 @@ public class MainForm : Form
             await Task.Run(() => CreatePdf(saveDialog.FileName));
 
             AddToRecentFiles(saveDialog.FileName);
-            MessageBox.Show($"PDF créé avec succès!\n{saveDialog.FileName}", "Succès",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var result = MessageBox.Show(
+                $"PDF créé avec succès!\n{saveDialog.FileName}\n\nVoulez-vous ouvrir le fichier?",
+                "Succès",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+
+            if (result == DialogResult.Yes)
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = saveDialog.FileName,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
         }
         catch (Exception ex)
         {
