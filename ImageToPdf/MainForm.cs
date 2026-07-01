@@ -53,6 +53,10 @@ public class MainForm : Form
     // Miniatures
     private ImageList imageListThumbnails = null!;
 
+    // Cache des miniatures par (taille|chemin) pour éviter de relire/redessiner
+    // chaque image à chaque reconstruction de la liste (ajout/suppression/déplacement).
+    private readonly Dictionary<string, Bitmap> thumbnailCache = new();
+
     // Historique récent
     private List<string> recentFiles = new();
     private const int MaxRecentFiles = 10;
@@ -125,6 +129,17 @@ public class MainForm : Form
     private void InitializeComponent()
     {
         this.Text = "PDF Merger";
+
+        // Icône de la fenêtre / barre des tâches (chargée depuis la ressource embarquée)
+        try
+        {
+            using var iconStream = System.Reflection.Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream("ImageToPdf.app.ico");
+            if (iconStream != null)
+                this.Icon = new Icon(iconStream);
+        }
+        catch { /* icône optionnelle : on ignore toute erreur */ }
+
         this.Size = new Size(1000, 650);
         this.MinimumSize = new Size(800, 550);
         this.StartPosition = FormStartPosition.CenterScreen;
@@ -343,7 +358,7 @@ ImageToPdf.exe [fichiers...] sortie.pdf
 ImageToPdf.exe -o sortie.pdf fichiers...
 ImageToPdf.exe --help
 
-Version 2.9.0
+Version 2.9.1
 ";
 
         using var helpForm = new Form
@@ -417,12 +432,24 @@ Version 2.9.0
 
         for (int i = 0; i < filePaths.Count; i++)
         {
-            var thumb = CreateThumbnailWithSize(filePaths[i], size);
+            var thumb = GetOrCreateThumbnail(filePaths[i], size);
             imageListThumbnails.Images.Add(thumb);
             listViewFiles.Items[i].ImageIndex = i;
         }
 
         listViewFiles.LargeImageList = imageListThumbnails;
+    }
+
+    // Renvoie la miniature depuis le cache si elle existe déjà, sinon la génère.
+    private Bitmap GetOrCreateThumbnail(string filePath, int size)
+    {
+        var key = size + "|" + filePath;
+        if (thumbnailCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var thumb = CreateThumbnailWithSize(filePath, size);
+        thumbnailCache[key] = thumb;
+        return thumb;
     }
 
     private Bitmap CreateThumbnailWithSize(string filePath, int size)
@@ -1263,15 +1290,18 @@ Version 2.9.0
         pictureBoxPreview.Image?.Dispose();
         pictureBoxPreview.Image = null;
 
-        if (listViewFiles.SelectedIndices.Count == 0)
+        // On lit le chemin directement depuis l'élément sélectionné (via son Tag)
+        // plutôt que via filePaths[index]. L'élément et son Tag voyagent toujours
+        // ensemble : plus aucun risque de désynchronisation pendant une
+        // reconstruction/suppression/tri (cause du crash ArgumentOutOfRangeException
+        // rapporté depuis ListViewFiles_SelectedIndexChanged).
+        var selectedItem = listViewFiles.SelectedItems.Count > 0 ? listViewFiles.SelectedItems[0] : null;
+        if (selectedItem?.Tag is not string filePath)
         {
             lblPreviewInfo.Text = "Aperçu";
             lblNoPreview.Text = "Sélectionnez un fichier\npour voir l'aperçu";
             return;
         }
-
-        var index = listViewFiles.SelectedIndices[0];
-        var filePath = filePaths[index];
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
         var fileName = Path.GetFileName(filePath);
 
@@ -1439,19 +1469,28 @@ Version 2.9.0
         foreach (var file in files)
         {
             var ext = Path.GetExtension(file).ToLowerInvariant();
-            if (allValidExtensions.Contains(ext) && !filePaths.Contains(file))
-            {
-                filesToAdd.Add(file);
-            }
+            if (!allValidExtensions.Contains(ext))
+                continue;
+
+            // Normaliser le chemin pour une détection de doublons fiable :
+            // insensible à la casse et indépendante des chemins relatifs,
+            // comme le système de fichiers Windows.
+            string fullPath;
+            try { fullPath = Path.GetFullPath(file); }
+            catch { continue; }
+
+            bool alreadyPresent =
+                filePaths.Any(p => string.Equals(p, fullPath, StringComparison.OrdinalIgnoreCase)) ||
+                filesToAdd.Any(p => string.Equals(p, fullPath, StringComparison.OrdinalIgnoreCase));
+
+            if (!alreadyPresent)
+                filesToAdd.Add(fullPath);
         }
 
         if (filesToAdd.Count == 0) return;
 
-        // Ajouter les fichiers à la liste
-        foreach (var file in filesToAdd)
-        {
-            filePaths.Add(file);
-        }
+        // Ajouter les fichiers (chemins normalisés) à la liste
+        filePaths.AddRange(filesToAdd);
 
         // Reconstruire complètement les ImageLists et la ListView
         RebuildFileList();
@@ -1496,8 +1535,8 @@ Version 2.9.0
             var fileInfo = new FileInfo(file);
             var dateStr = fileInfo.LastWriteTime.ToString("dd/MM/yyyy HH:mm");
 
-            // Ajouter miniature et petite icône au même index
-            var thumb = CreateThumbnail(file);
+            // Ajouter miniature (depuis le cache) et petite icône au même index
+            var thumb = GetOrCreateThumbnail(file, thumbSize.Width);
             imageListThumbnails.Images.Add(thumb);
 
             var smallIcon = CreateSmallIcon(ext);
@@ -1505,7 +1544,8 @@ Version 2.9.0
 
             var item = new ListViewItem(Path.GetFileName(file))
             {
-                ImageIndex = i
+                ImageIndex = i,
+                Tag = file
             };
             item.SubItems.Add(typeName);
             item.SubItems.Add(dateStr);
@@ -1584,6 +1624,12 @@ Version 2.9.0
     private void BtnClear_Click(object? sender, EventArgs e)
     {
         filePaths.Clear();
+
+        // Libérer les miniatures mises en cache
+        foreach (var bmp in thumbnailCache.Values)
+            bmp.Dispose();
+        thumbnailCache.Clear();
+
         RebuildFileList();
         UpdateTitle();
         UpdatePreview();
