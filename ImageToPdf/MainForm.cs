@@ -358,7 +358,7 @@ ImageToPdf.exe [fichiers...] sortie.pdf
 ImageToPdf.exe -o sortie.pdf fichiers...
 ImageToPdf.exe --help
 
-Version 2.9.1
+Version 2.9.2
 ";
 
         using var helpForm = new Form
