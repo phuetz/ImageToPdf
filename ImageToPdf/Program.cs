@@ -13,6 +13,13 @@ static class Program
 
         // Mode GUI
         ApplicationConfiguration.Initialize();
+
+        // Filet de sécurité : convertir toute exception non gérée en message clair
+        // plutôt que d'afficher la boîte de dialogue de plantage .NET brute (JIT).
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (s, e) => ShowUnhandledError(e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (s, e) => ShowUnhandledError(e.ExceptionObject as Exception);
+
         Application.Run(new MainForm());
         return 0;
     }
@@ -193,6 +200,17 @@ EXEMPLES:
 
 Sans arguments, l'interface graphique est lancée.
 ");
+    }
+
+    static void ShowUnhandledError(Exception? ex)
+    {
+        var message = ex?.Message ?? "Une erreur inattendue s'est produite.";
+        MessageBox.Show(
+            $"Une erreur inattendue s'est produite :\n\n{message}\n\n" +
+            "L'application va essayer de continuer. Si le problème persiste, redémarrez-la.",
+            "PDF Merger - Erreur",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
     }
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]

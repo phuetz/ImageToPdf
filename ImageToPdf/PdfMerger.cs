@@ -58,15 +58,46 @@ public static class PdfMerger
 
     private static void AddImageToPdf(PdfSharpDocument document, string imagePath)
     {
-        using var stream = File.OpenRead(imagePath);
-        var image = XImage.FromStream(() => stream);
+        XImage? image = null;
+        Stream? keepAlive = null; // le flux doit rester ouvert jusqu'au DrawImage
+        try
+        {
+            try
+            {
+                // Chemin natif (rapide, conserve la compression d'origine).
+                var fileStream = File.OpenRead(imagePath);
+                keepAlive = fileStream;
+                image = XImage.FromStream(() => fileStream);
+                _ = image.PixelWidth; // force le décodage pour détecter un format non géré (ex: TIFF)
+            }
+            catch
+            {
+                // Repli GDI+ : le décodeur interne (ImageSharp) ne gère pas tous les
+                // formats annoncés — TIFF notamment. System.Drawing les lit, on
+                // ré-encode en PNG en mémoire pour PdfSharpCore.
+                image?.Dispose();
+                keepAlive?.Dispose();
 
-        var page = document.AddPage();
-        page.Width = XUnit.FromPoint(image.PointWidth);
-        page.Height = XUnit.FromPoint(image.PointHeight);
+                var ms = new MemoryStream();
+                using (var bmp = new System.Drawing.Bitmap(imagePath))
+                    bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                ms.Position = 0;
+                keepAlive = ms;
+                image = XImage.FromStream(() => ms);
+            }
 
-        using var gfx = XGraphics.FromPdfPage(page);
-        gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+            var page = document.AddPage();
+            page.Width = XUnit.FromPoint(image.PointWidth);
+            page.Height = XUnit.FromPoint(image.PointHeight);
+
+            using var gfx = XGraphics.FromPdfPage(page);
+            gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+        }
+        finally
+        {
+            image?.Dispose();
+            keepAlive?.Dispose();
+        }
     }
 
     private static void AddPdfToPdf(PdfSharpDocument document, string pdfPath)
@@ -89,65 +120,83 @@ public static class PdfMerger
         var page = document.AddPage();
         page.Size = PdfSharpCore.PageSize.A4;
 
-        using var gfx = XGraphics.FromPdfPage(page);
-        var font = new XFont("Arial", 11);
-        var titleFont = new XFont("Arial", 16, XFontStyle.Bold);
-
-        double margin = 50;
-        double y = margin;
-        double lineHeight = 16;
-        double maxWidth = page.Width - (2 * margin);
-
-        // Titre du fichier
-        var fileName = Path.GetFileNameWithoutExtension(markdownPath);
-        gfx.DrawString(fileName, titleFont, XBrushes.Black, margin, y);
-        y += 30;
-
-        // Contenu
-        var lines = plainText.Split('\n');
-        foreach (var line in lines)
+        var gfx = XGraphics.FromPdfPage(page);
+        try
         {
-            if (y > page.Height - margin)
+            var font = new XFont("Arial", 11);
+            var titleFont = new XFont("Arial", 16, XFontStyle.Bold);
+
+            double margin = 50;
+            double y = margin;
+            double lineHeight = 16;
+            double maxWidth = page.Width - (2 * margin);
+            double bottom = page.Height - margin;
+
+            // Titre du fichier
+            var fileName = Path.GetFileNameWithoutExtension(markdownPath);
+            gfx.DrawString(fileName, titleFont, XBrushes.Black, margin, y);
+            y += 30;
+
+            // 1) On calcule d'abord TOUTES les lignes d'affichage (retour à la ligne
+            //    mot à mot). La mesure est indépendante de la page (toutes en A4),
+            //    donc on peut la faire avec le gfx courant avant toute pagination.
+            //    null = ligne vide (demi-interligne).
+            var displayLines = new List<string?>();
+            foreach (var rawLine in plainText.Split('\n'))
             {
-                page = document.AddPage();
-                page.Size = PdfSharpCore.PageSize.A4;
-                gfx.Dispose();
-                var newGfx = XGraphics.FromPdfPage(page);
-                y = margin;
-                DrawTextLine(newGfx, line.Trim(), font, margin, ref y, lineHeight, maxWidth, page.Height - margin);
-                newGfx.Dispose();
+                var line = rawLine.Trim();
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    displayLines.Add(null);
+                    continue;
+                }
+                foreach (var wrapped in WrapLine(gfx, line, font, maxWidth))
+                    displayLines.Add(wrapped);
             }
-            else
+
+            // 2) On dessine en paginant proprement (une nouvelle page dès qu'on
+            //    dépasse le bas), sans jamais perdre de contenu.
+            foreach (var dl in displayLines)
             {
-                DrawTextLine(gfx, line.Trim(), font, margin, ref y, lineHeight, maxWidth, page.Height - margin);
+                if (dl == null)
+                {
+                    y += lineHeight / 2;
+                    continue;
+                }
+
+                if (y > bottom)
+                {
+                    gfx.Dispose();
+                    page = document.AddPage();
+                    page.Size = PdfSharpCore.PageSize.A4;
+                    gfx = XGraphics.FromPdfPage(page);
+                    y = margin;
+                }
+
+                gfx.DrawString(dl, font, XBrushes.Black, margin, y);
+                y += lineHeight;
             }
+        }
+        finally
+        {
+            gfx.Dispose();
         }
     }
 
-    private static void DrawTextLine(XGraphics gfx, string text, XFont font, double x, ref double y, double lineHeight, double maxWidth, double maxY)
+    // Découpe une ligne en lignes d'affichage tenant dans maxWidth (retour à la ligne mot à mot).
+    private static IEnumerable<string> WrapLine(XGraphics gfx, string text, XFont font, double maxWidth)
     {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            y += lineHeight / 2;
-            return;
-        }
-
         var words = text.Split(' ');
         var currentLine = "";
 
         foreach (var word in words)
         {
             var testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
-            var size = gfx.MeasureString(testLine, font);
 
-            if (size.Width > maxWidth && !string.IsNullOrEmpty(currentLine))
+            if (gfx.MeasureString(testLine, font).Width > maxWidth && !string.IsNullOrEmpty(currentLine))
             {
-                gfx.DrawString(currentLine, font, XBrushes.Black, x, y);
-                y += lineHeight;
+                yield return currentLine;
                 currentLine = word;
-
-                if (y > maxY)
-                    return;
             }
             else
             {
@@ -156,9 +205,6 @@ public static class PdfMerger
         }
 
         if (!string.IsNullOrEmpty(currentLine))
-        {
-            gfx.DrawString(currentLine, font, XBrushes.Black, x, y);
-            y += lineHeight;
-        }
+            yield return currentLine;
     }
 }
