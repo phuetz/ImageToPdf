@@ -76,6 +76,17 @@ public class MainForm : Form
     private List<string> filePaths = new();
     private bool previewVisible = true;
 
+    // Vrai pendant une conversion en arrière-plan : bloque toute modification de la
+    // liste (raccourcis clavier, glisser-déposer, réentrance) et la fermeture directe.
+    private bool isBusy = false;
+
+    // Incrémenté à chaque nouvel aperçu : les rendus async périmés s'abandonnent
+    // au lieu d'écraser l'aperçu du fichier actuellement sélectionné.
+    private int previewGeneration = 0;
+
+    private static string AppVersion =>
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
+
     private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
     private static readonly string[] PdfExtensions = { ".pdf" };
     private static readonly string[] MarkdownExtensions = { ".md", ".markdown" };
@@ -89,11 +100,28 @@ public class MainForm : Form
         LoadConfiguration();
         InitializeComponent();
         LoadRecentFiles();
+        CleanupOldPreviewFiles();
+    }
+
+    // Les aperçus (F5) créent des PDF temporaires ouverts dans le lecteur externe :
+    // impossible de les supprimer à chaud, on purge donc ceux des sessions passées.
+    private static void CleanupOldPreviewFiles()
+    {
+        try
+        {
+            foreach (var f in Directory.GetFiles(Path.GetTempPath(), "PDFMerger_Preview_*.pdf"))
+            {
+                try { File.Delete(f); } catch { /* encore ouvert : purgé au prochain démarrage */ }
+            }
+        }
+        catch { }
     }
 
     private void LoadConfiguration()
     {
-        toolsEnabled = false;
+        // Outils (PDF → Word, PDFsam) activés par défaut ;
+        // pdfmerger.conf peut les désactiver avec tools_enabled=false.
+        toolsEnabled = true;
 
         if (File.Exists(ConfigFilePath))
         {
@@ -121,7 +149,7 @@ public class MainForm : Form
             }
             catch
             {
-                toolsEnabled = false;
+                toolsEnabled = true;
             }
         }
     }
@@ -146,6 +174,19 @@ public class MainForm : Form
         this.BackColor = Color.White;
         this.KeyPreview = true;
         this.KeyDown += MainForm_KeyDown;
+
+        // Fermer en pleine conversion abandonne l'écriture et laisse un PDF incomplet.
+        this.FormClosing += (s, e) =>
+        {
+            if (isBusy && MessageBox.Show(
+                    "Une opération est en cours. Quitter maintenant peut laisser un fichier incomplet.\n\nQuitter quand même ?",
+                    "Opération en cours",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) == DialogResult.No)
+            {
+                e.Cancel = true;
+            }
+        };
 
         CreateImageList();
         CreateThumbnailImageList();
@@ -330,7 +371,7 @@ public class MainForm : Form
 
     private void BtnHelp_Click(object? sender, EventArgs e)
     {
-        var helpText = @"PDF Merger - Aide
+        var helpText = $@"PDF Merger - Aide
 
 UTILISATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -358,7 +399,7 @@ ImageToPdf.exe [fichiers...] sortie.pdf
 ImageToPdf.exe -o sortie.pdf fichiers...
 ImageToPdf.exe --help
 
-Version 2.9.2
+Version {AppVersion}
 ";
 
         using var helpForm = new Form
@@ -1212,11 +1253,13 @@ Version 2.9.2
     private async void UpdatePdfPagePreview()
     {
         if (currentPreviewFile == null) return;
+        int gen = ++previewGeneration; // ce rendu remplace tout rendu encore en vol
 
         try
         {
             var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(currentPreviewFile);
             var pdfDoc = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file);
+            if (gen != previewGeneration) return;
 
             if (currentPreviewPage < pdfDoc.PageCount)
             {
@@ -1233,9 +1276,10 @@ Version 2.9.2
 
                 await page.RenderToStreamAsync(stream, options);
                 stream.Seek(0);
+                if (gen != previewGeneration) return;
 
                 using var netStream = stream.AsStreamForRead();
-                var img = Image.FromStream(netStream);
+                using var img = Image.FromStream(netStream);
                 pictureBoxPreview.Image?.Dispose();
                 pictureBoxPreview.Image = new Bitmap(img);
 
@@ -1284,6 +1328,8 @@ Version 2.9.2
 
     private void UpdatePreview()
     {
+        previewGeneration++; // invalide les rendus async encore en vol
+
         pictureBoxPreview.Visible = false;
         textBoxPreview.Visible = false;
         lblNoPreview.Visible = true;
@@ -1342,6 +1388,7 @@ Version 2.9.2
 
     private async void ShowPdfPreview(string filePath)
     {
+        int gen = previewGeneration;
         currentPreviewFile = filePath;
         currentPreviewPage = 0;
 
@@ -1349,6 +1396,7 @@ Version 2.9.2
         {
             var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(filePath);
             var pdfDoc = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file);
+            if (gen != previewGeneration) return; // la sélection a changé entre-temps
 
             totalPreviewPages = (int)pdfDoc.PageCount;
 
@@ -1372,9 +1420,10 @@ Version 2.9.2
 
                 await page.RenderToStreamAsync(stream, options);
                 stream.Seek(0);
+                if (gen != previewGeneration) return;
 
                 using var netStream = stream.AsStreamForRead();
-                var img = Image.FromStream(netStream);
+                using var img = Image.FromStream(netStream);
                 pictureBoxPreview.Image?.Dispose();
                 pictureBoxPreview.Image = new Bitmap(img);
 
@@ -1385,39 +1434,54 @@ Version 2.9.2
         }
         catch
         {
+            if (gen != previewGeneration) return;
+
             // Fallback: afficher les métadonnées si le rendu échoue
             totalPreviewPages = 0;
             btnPrevPage.Enabled = false;
             btnNextPage.Enabled = false;
             lblPageInfo.Text = "";
 
-            using var doc = PdfReader.Open(filePath, PdfDocumentOpenMode.Import);
-            var pageCount = doc.PageCount;
-            var firstPage = doc.Pages[0];
-            var width = firstPage.Width.Point;
-            var height = firstPage.Height.Point;
+            try
+            {
+                using var doc = PdfReader.Open(filePath, PdfDocumentOpenMode.Import);
+                var pageCount = doc.PageCount;
 
-            textBoxPreview.Clear();
-            textBoxPreview.SelectionFont = new Font("Segoe UI", 12, FontStyle.Bold);
-            textBoxPreview.AppendText("Document PDF\n\n");
-            textBoxPreview.SelectionFont = new Font("Segoe UI", 10);
-            textBoxPreview.AppendText($"  Pages: {pageCount}\n\n");
-            textBoxPreview.AppendText($"  Dimensions: {width:F0} x {height:F0} pt\n\n");
+                textBoxPreview.Clear();
+                textBoxPreview.SelectionFont = new Font("Segoe UI", 12, FontStyle.Bold);
+                textBoxPreview.AppendText("Document PDF\n\n");
+                textBoxPreview.SelectionFont = new Font("Segoe UI", 10);
+                textBoxPreview.AppendText($"  Pages: {pageCount}\n\n");
+                if (pageCount > 0)
+                {
+                    var firstPage = doc.Pages[0];
+                    textBoxPreview.AppendText($"  Dimensions: {firstPage.Width.Point:F0} x {firstPage.Height.Point:F0} pt\n\n");
+                }
 
-            var fileInfo = new FileInfo(filePath);
-            var sizeKb = fileInfo.Length / 1024.0;
-            var sizeStr = sizeKb > 1024 ? $"{sizeKb / 1024:F1} Mo" : $"{sizeKb:F0} Ko";
-            textBoxPreview.AppendText($"  Taille: {sizeStr}\n");
+                var fileInfo = new FileInfo(filePath);
+                var sizeKb = fileInfo.Length / 1024.0;
+                var sizeStr = sizeKb > 1024 ? $"{sizeKb / 1024:F1} Mo" : $"{sizeKb:F0} Ko";
+                textBoxPreview.AppendText($"  Taille: {sizeStr}\n");
 
-            textBoxPreview.Visible = true;
-            pictureBoxPreview.Visible = false;
-            lblNoPreview.Visible = false;
+                textBoxPreview.Visible = true;
+                pictureBoxPreview.Visible = false;
+                lblNoPreview.Visible = false;
+            }
+            catch
+            {
+                // PDF chiffré ou endommagé : message clair dans le volet plutôt que
+                // la boîte d'erreur générique du gestionnaire global (async void).
+                lblNoPreview.Text = "Aperçu impossible pour ce PDF\n(protégé par mot de passe ou endommagé)";
+                lblNoPreview.Visible = true;
+                pictureBoxPreview.Visible = false;
+                textBoxPreview.Visible = false;
+            }
         }
     }
 
     private void ShowMarkdownPreview(string filePath)
     {
-        var content = File.ReadAllText(filePath);
+        var content = PdfMerger.ReadAllTextSmart(filePath);
 
         textBoxPreview.Clear();
         textBoxPreview.Text = content;
@@ -1427,6 +1491,12 @@ Version 2.9.2
 
     private void MainForm_DragEnter(object? sender, DragEventArgs e)
     {
+        if (isBusy)
+        {
+            e.Effect = DragDropEffects.None;
+            return;
+        }
+
         if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
         {
             e.Effect = DragDropEffects.Copy;
@@ -1435,6 +1505,8 @@ Version 2.9.2
 
     private void MainForm_DragDrop(object? sender, DragEventArgs e)
     {
+        if (isBusy) return;
+
         var files = e.Data?.GetData(DataFormats.FileDrop) as string[];
         if (files != null)
         {
@@ -1645,6 +1717,8 @@ Version 2.9.2
 
     private async void BtnConvert_Click(object? sender, EventArgs e)
     {
+        if (isBusy) return;
+
         if (filePaths.Count == 0)
         {
             MessageBox.Show("Veuillez ajouter au moins un fichier.", "Aucun fichier",
@@ -1672,6 +1746,7 @@ Version 2.9.2
         try
         {
             await Task.Run(() => CreatePdf(saveDialog.FileName));
+            progressBar.Value = progressBar.Maximum;
 
             AddToRecentFiles(saveDialog.FileName);
             var result = MessageBox.Show(
@@ -1705,6 +1780,7 @@ Version 2.9.2
 
     private void SetButtonsEnabled(bool enabled)
     {
+        isBusy = !enabled;
         btnAddFiles.Enabled = enabled;
         btnRemoveSelected.Enabled = enabled;
         btnMoveUp.Enabled = enabled;
@@ -1717,6 +1793,8 @@ Version 2.9.2
 
     private async void BtnPreviewResult_Click(object? sender, EventArgs e)
     {
+        if (isBusy) return;
+
         if (filePaths.Count == 0)
         {
             MessageBox.Show("Veuillez ajouter au moins un fichier.", "Aucun fichier",
@@ -1759,17 +1837,22 @@ Version 2.9.2
 
     private void CreatePdf(string outputPath)
     {
-        PdfMerger.CreatePdf(filePaths, outputPath, (current, total, fileName) =>
+        // Copie défensive : le thread de fusion ne doit jamais itérer la liste vivante.
+        var files = new List<string>(filePaths);
+        PdfMerger.CreatePdf(files, outputPath, (current, total, fileName) =>
         {
             this.Invoke(() =>
             {
-                progressBar.Value = current;
+                // current = fichier en cours (1..N) → current-1 fichiers réellement terminés
+                progressBar.Value = Math.Min(Math.Max(current - 1, 0), progressBar.Maximum);
             });
         });
     }
 
     private async void PdfToWord_Click(object? sender, EventArgs e)
     {
+        if (isBusy) return;
+
         using var openDialog = new OpenFileDialog
         {
             Title = "Sélectionner un fichier PDF",
@@ -1922,6 +2005,14 @@ Version 2.9.2
     // Raccourcis clavier
     private void MainForm_KeyDown(object? sender, KeyEventArgs e)
     {
+        // Les raccourcis appellent les handlers directement : sans cette garde ils
+        // contournent SetButtonsEnabled(false) pendant une conversion.
+        if (isBusy)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Control)
         {
             switch (e.KeyCode)
