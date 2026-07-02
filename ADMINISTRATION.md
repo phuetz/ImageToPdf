@@ -26,7 +26,10 @@ L'exécutable est signé avec un certificat **auto-signé** : Windows ne lui fer
 signing\PDFMerger-CodeSigning-public.cer
 ```
 
-Ce fichier ne contient **que la partie publique** du certificat : il peut circuler librement (mail, GPO, partage réseau).
+Ce fichier ne contient **que la partie publique** du certificat : il peut circuler librement (mail, GPO, partage réseau). Il est aussi téléchargeable directement depuis GitHub :
+
+- `https://github.com/phuetz/ImageToPdf/raw/master/signing/PDFMerger-CodeSigning-public.cer`
+- ou en pièce jointe de la dernière release : `https://github.com/phuetz/ImageToPdf/releases/latest`
 
 ### Par stratégie de groupe (recommandé)
 
