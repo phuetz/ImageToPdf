@@ -172,4 +172,6 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 ## Licence
 
-Ce projet est fourni tel quel, sans garantie.
+Ce projet est distribué sous licence [GNU AGPL v3](LICENSE) — licence héritée de la
+dépendance [iText7](https://github.com/itext/itext7-dotnet) (extraction de texte PDF),
+elle-même publiée sous AGPL. Fourni tel quel, sans garantie.

@@ -72,7 +72,7 @@ Toutes les éditions sont gratuites et open source.
 
 ## Open source et transparent
 
-Le code source complet est disponible sur GitHub sous licence MIT. Vous pouvez :
+Le code source complet est disponible sur GitHub sous licence AGPL v3. Vous pouvez :
 
 - Vérifier exactement ce que fait l'application
 - Proposer des améliorations

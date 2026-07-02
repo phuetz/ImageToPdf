@@ -3,7 +3,7 @@
 **Fusionnez vos images, PDF et fichiers Markdown en un seul document PDF**
 
 [![GitHub release](https://img.shields.io/github/v/release/phuetz/ImageToPdf)](https://github.com/phuetz/ImageToPdf/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/phuetz/ImageToPdf/blob/master/LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/phuetz/ImageToPdf/blob/master/LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple)](https://dotnet.microsoft.com/)
 
 ---
@@ -18,7 +18,7 @@ PDF Merger est une application Windows légère et gratuite qui simplifie la cr�
 - **Glisser-déposer** : Ajoutez vos fichiers en les déposant directement
 - **Multi-format** : Images (JPG, PNG, BMP, GIF, TIFF), PDF et Markdown
 - **Portable** : Exécutable autonome, aucune installation requise
-- **Open source** : Code source disponible sous licence MIT
+- **Open source** : Code source disponible sous licence AGPL v3
 
 ---
 
@@ -117,7 +117,7 @@ PDF Merger est un projet open source. Les contributions sont les bienvenues !
 
 ## Licence
 
-PDF Merger est distribué sous licence MIT. Vous êtes libre de l'utiliser, le modifier et le redistribuer.
+PDF Merger est distribué sous licence GNU AGPL v3 (héritée de la dépendance iText7). Vous êtes libre de l'utiliser, de le modifier et de le redistribuer aux conditions de cette licence — notamment la mise à disposition du code source des versions modifiées.
 
 ---
 
