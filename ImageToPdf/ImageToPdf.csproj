@@ -9,9 +9,9 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
 
     <!-- Version du produit : sans ces balises le binaire se déclarait 1.0.0.0 -->
-    <Version>2.9.2</Version>
-    <FileVersion>2.9.2.0</FileVersion>
-    <AssemblyVersion>2.9.2.0</AssemblyVersion>
+    <Version>2.9.3</Version>
+    <FileVersion>2.9.3.0</FileVersion>
+    <AssemblyVersion>2.9.3.0</AssemblyVersion>
     <Product>PDF Merger</Product>
     <Company>CCAS</Company>
     <Copyright>© CCAS</Copyright>
