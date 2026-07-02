@@ -5,6 +5,10 @@ static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        // Les encodages Windows (1252…) ne sont pas inclus par défaut dans .NET :
+        // indispensable pour lire les fichiers texte « ANSI » français.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
         // Mode ligne de commande si des arguments sont fournis
         if (args.Length > 0)
         {
@@ -79,15 +83,49 @@ static class Program
         }
 
         // Si pas de -o, le dernier argument est le fichier de sortie
+        bool outputInferred = false;
         if (outputFile == null && inputFiles.Count >= 2)
         {
             outputFile = inputFiles[^1];
             inputFiles.RemoveAt(inputFiles.Count - 1);
+            outputInferred = true;
         }
 
         if (string.IsNullOrEmpty(outputFile))
         {
             Console.Error.WriteLine("Erreur: Aucun fichier de sortie spécifié.");
+            return 1;
+        }
+
+        if (outputFile.Contains('*') || outputFile.Contains('?'))
+        {
+            Console.Error.WriteLine($"Erreur: Le fichier de sortie ne peut pas contenir de joker: '{outputFile}'.");
+            return 1;
+        }
+
+        // La sortie doit être un .pdf : sans cette garde, « ImageToPdf.exe a.jpg b.jpg »
+        // (oubli de la sortie) écraserait b.jpg avec le contenu du PDF.
+        if (!outputFile.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"Erreur: Le fichier de sortie doit porter l'extension .pdf (reçu: '{outputFile}').");
+            Console.Error.WriteLine("Utilisez -o <sortie.pdf> pour désigner explicitement la sortie.");
+            return 1;
+        }
+
+        // Sans -o explicite, refuser de réutiliser un fichier existant comme sortie :
+        // un PDF d'entrée en dernière position serait sinon détruit sans confirmation.
+        if (outputInferred && File.Exists(outputFile))
+        {
+            Console.Error.WriteLine($"Erreur: '{outputFile}' existe déjà et serait écrasé.");
+            Console.Error.WriteLine("Pour écraser volontairement un fichier, utilisez -o <sortie.pdf>.");
+            return 1;
+        }
+
+        string outputFullPath;
+        try { outputFullPath = Path.GetFullPath(outputFile); }
+        catch
+        {
+            Console.Error.WriteLine($"Erreur: Chemin de sortie invalide: '{outputFile}'.");
             return 1;
         }
 
@@ -110,8 +148,14 @@ static class Program
 
                 try
                 {
-                    var matches = Directory.GetFiles(dir, pattern);
-                    validFiles.AddRange(matches.Where(f => PdfMerger.IsValidExtension(f)));
+                    var matches = Directory.GetFiles(dir, pattern)
+                        .Where(f => PdfMerger.IsValidExtension(f))
+                        .Select(Path.GetFullPath)
+                        .ToArray();
+                    // Ordre naturel (page2 avant page10), comme l'Explorateur Windows —
+                    // Directory.GetFiles trie « 1, 10, 2 » et mélangerait les pages scannées.
+                    Array.Sort(matches, StrCmpLogicalW);
+                    validFiles.AddRange(matches);
                 }
                 catch (Exception ex)
                 {
@@ -133,6 +177,14 @@ static class Program
             {
                 Console.Error.WriteLine($"Fichier introuvable: {file}");
             }
+        }
+
+        // Ne jamais reprendre la sortie comme entrée : « -o merged.pdf *.pdf » relancé
+        // dans le même dossier aspirerait le merged.pdf du passage précédent.
+        int selfMatches = validFiles.RemoveAll(f => string.Equals(f, outputFullPath, StringComparison.OrdinalIgnoreCase));
+        if (selfMatches > 0)
+        {
+            Console.Error.WriteLine($"Avertissement: '{outputFile}' est à la fois entrée et sortie — ignoré comme entrée.");
         }
 
         if (validFiles.Count == 0)
@@ -187,6 +239,11 @@ OPTIONS:
     -v, --verbose            Afficher les détails du traitement
     -h, --help               Afficher cette aide
 
+RÈGLES DE SORTIE:
+    Le fichier de sortie doit porter l'extension .pdf.
+    Sans -o, le dernier argument est la sortie et ne doit pas déjà exister
+    (protection contre l'écrasement accidentel d'un fichier d'entrée).
+
 FORMATS SUPPORTÉS:
     Images:    .jpg, .jpeg, .png, .bmp, .gif, .tiff, .tif
     PDF:       .pdf
@@ -215,4 +272,8 @@ Sans arguments, l'interface graphique est lancée.
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     static extern bool AttachConsole(int dwProcessId);
+
+    // Tri « naturel » de l'Explorateur Windows (page2 < page10)
+    [System.Runtime.InteropServices.DllImport("shlwapi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern int StrCmpLogicalW(string x, string y);
 }

@@ -1,3 +1,4 @@
+using System.Text;
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf.IO;
 using Markdig;
@@ -58,6 +59,13 @@ public static class PdfMerger
 
     private static void AddImageToPdf(PdfSharpDocument document, string imagePath)
     {
+        var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+        if (extension is ".tif" or ".tiff")
+        {
+            AddTiffToPdf(document, imagePath);
+            return;
+        }
+
         XImage? image = null;
         Stream? keepAlive = null; // le flux doit rester ouvert jusqu'au DrawImage
         try
@@ -100,6 +108,37 @@ public static class PdfMerger
         }
     }
 
+    private static void AddTiffToPdf(PdfSharpDocument document, string tiffPath)
+    {
+        // GDI+ décode les TIFF multi-pages (sortie typique des scanners) ; ImageSharp,
+        // le décodeur interne de PdfSharpCore, ne les gère pas. Une page PDF par frame,
+        // chaque frame ré-encodée en PNG en mémoire — sans la boucle, seules la
+        // première page d'un scan de N pages arrivait dans le PDF.
+        using var img = System.Drawing.Image.FromFile(tiffPath);
+        var pageDimension = new System.Drawing.Imaging.FrameDimension(img.FrameDimensionsList[0]);
+        int frameCount;
+        try { frameCount = img.GetFrameCount(pageDimension); }
+        catch { frameCount = 1; }
+
+        for (int frame = 0; frame < frameCount; frame++)
+        {
+            if (frameCount > 1)
+                img.SelectActiveFrame(pageDimension, frame);
+
+            using var ms = new MemoryStream();
+            img.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            ms.Position = 0;
+
+            using var image = XImage.FromStream(() => ms);
+            var page = document.AddPage();
+            page.Width = XUnit.FromPoint(image.PointWidth);
+            page.Height = XUnit.FromPoint(image.PointHeight);
+
+            using var gfx = XGraphics.FromPdfPage(page);
+            gfx.DrawImage(image, 0, 0, page.Width, page.Height);
+        }
+    }
+
     private static void AddPdfToPdf(PdfSharpDocument document, string pdfPath)
     {
         using var inputDocument = PdfReader.Open(pdfPath, PdfDocumentOpenMode.Import);
@@ -113,7 +152,7 @@ public static class PdfMerger
 
     private static void AddMarkdownToPdf(PdfSharpDocument document, string markdownPath)
     {
-        var markdownContent = File.ReadAllText(markdownPath);
+        var markdownContent = ReadAllTextSmart(markdownPath);
         var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
         var plainText = Markdown.ToPlainText(markdownContent, pipeline);
 
@@ -180,6 +219,30 @@ public static class PdfMerger
         finally
         {
             gfx.Dispose();
+        }
+    }
+
+    // Lit un fichier texte en détectant l'encodage : BOM d'abord, sinon UTF-8 strict,
+    // avec repli Windows-1252 (« ANSI » français) — sans quoi les accents des fichiers
+    // issus d'éditeurs anciens deviennent « � » jusque dans le PDF final.
+    public static string ReadAllTextSmart(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+
+        try
+        {
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return Encoding.GetEncoding(1252).GetString(bytes);
         }
     }
 
