@@ -119,7 +119,7 @@ public class MainForm : Form
 
     private void LoadConfiguration()
     {
-        // Outils (PDF → Word, PDFsam) activés par défaut ;
+        // Outils (PDF → Word) activés par défaut ;
         // pdfmerger.conf peut les désactiver avec tools_enabled=false.
         toolsEnabled = true;
 
@@ -286,8 +286,6 @@ public class MainForm : Form
             Padding = new Padding(4, 0, 4, 0)
         };
         toolsDropDown.DropDownItems.Add("PDF → Word", null, PdfToWord_Click);
-        toolsDropDown.DropDownItems.Add(new ToolStripSeparator());
-        toolsDropDown.DropDownItems.Add("Ouvrir PDFsam", null, OpenPdfSam_Click);
 
         // Menu déroulant Récents
         var recentDropDown = new ToolStripDropDownButton
@@ -1933,72 +1931,6 @@ Version {AppVersion}
             var paragraph = body.AppendChild(new WordParagraph());
             var run = paragraph.AppendChild(new WordRun());
             run.AppendChild(new WordText(para) { Space = SpaceProcessingModeValues.Preserve });
-        }
-    }
-
-    private void OpenPdfSam_Click(object? sender, EventArgs e)
-    {
-        // Chemins possibles pour PDFsam
-        var possiblePaths = new[]
-        {
-            @"C:\Program Files\PDFsam Basic\pdfsam.exe",
-            @"C:\Program Files\PDFsam Basic\PDFsam.exe",
-            @"C:\Program Files (x86)\PDFsam Basic\pdfsam.exe",
-            @"C:\Program Files (x86)\PDFsam Basic\PDFsam.exe",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PDFsam Basic\pdfsam.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\PDFsam Basic\pdfsam.exe"),
-            @"C:\Program Files\PDFsam\pdfsam.exe",
-            @"C:\Program Files (x86)\PDFsam\pdfsam.exe",
-            // Version Enhanced
-            @"C:\Program Files\PDFsam Enhanced\pdfsam.exe",
-            @"C:\Program Files (x86)\PDFsam Enhanced\pdfsam.exe",
-        };
-
-        string? pdfSamPath = null;
-
-        foreach (var path in possiblePaths)
-        {
-            if (File.Exists(path))
-            {
-                pdfSamPath = path;
-                break;
-            }
-        }
-
-        if (pdfSamPath == null)
-        {
-            var result = MessageBox.Show(
-                "PDFsam n'a pas été trouvé sur votre système.\n\n" +
-                "Voulez-vous le télécharger depuis le site officiel?",
-                "PDFsam non trouvé",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "https://pdfsam.org/download-pdfsam-basic/",
-                    UseShellExecute = true
-                };
-                System.Diagnostics.Process.Start(psi);
-            }
-            return;
-        }
-
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = pdfSamPath,
-                UseShellExecute = true
-            };
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Erreur lors du lancement de PDF SAM:\n{ex.Message}", "Erreur",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

@@ -16,7 +16,6 @@ PDF Merger est disponible en trois éditions :
 | Support Markdown | :x: | :white_check_mark: | :white_check_mark: |
 | Panneau d'aperçu avec zoom | :x: | :white_check_mark: | :white_check_mark: |
 | Conversion PDF → Word | :x: | :white_check_mark: | :white_check_mark: |
-| Intégration PDFsam | :x: | :white_check_mark: | :white_check_mark: |
 | Numérotation des pages | :x: | :x: | :white_check_mark: |
 | Filigrane personnalisable | :x: | :x: | :white_check_mark: |
 | Choix du format de page | :x: | :x: | :white_check_mark: |
