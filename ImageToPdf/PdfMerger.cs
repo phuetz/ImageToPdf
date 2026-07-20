@@ -18,7 +18,15 @@ public static class PdfMerger
         return ImageExtensions.Contains(ext) || PdfExtensions.Contains(ext) || MarkdownExtensions.Contains(ext);
     }
 
-    public static void CreatePdf(List<string> filePaths, string outputPath, Action<int, int, string>? progress = null)
+    // Vrai uniquement pour les formats image (pas PDF ni Markdown) — utilisé par la
+    // conversion par lot qui, par définition, ne regroupe que des images par dossier.
+    public static bool IsImageFile(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ImageExtensions.Contains(ext);
+    }
+
+    public static void CreatePdf(List<string> filePaths, string outputPath, Action<int, int, string>? progress = null, CancellationToken cancellationToken = default)
     {
         using var document = new PdfSharpDocument();
         document.Info.Title = "Document fusionné";
@@ -26,6 +34,10 @@ public static class PdfMerger
 
         for (int i = 0; i < filePaths.Count; i++)
         {
+            // Annulation coopérative : levée hors du try/catch par fichier pour
+            // remonter telle quelle (l'appelant distingue annulation et erreur).
+            cancellationToken.ThrowIfCancellationRequested();
+
             var filePath = filePaths[i];
             var ext = Path.GetExtension(filePath).ToLowerInvariant();
             var fileName = Path.GetFileName(filePath);

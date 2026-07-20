@@ -22,6 +22,7 @@ public class MainForm : Form
     private ToolStripButton btnMoveUp = null!;
     private ToolStripButton btnMoveDown = null!;
     private ToolStripButton btnClear = null!;
+    private ToolStripButton btnBatch = null!;
     private ToolStripButton btnConvert = null!;
     private ToolStripButton btnPreviewResult = null!;
     private ToolStripButton btnTogglePreview = null!;
@@ -272,6 +273,9 @@ public class MainForm : Form
         btnPreviewResult = CreateCommandButton("Aperçu", CreateViewIcon24(), "Voir le résultat");
         btnPreviewResult.Click += BtnPreviewResult_Click;
 
+        btnBatch = CreateCommandButton("Par lot", CreateBatchIcon24(), "Conversion par lot : un PDF par dossier (Ctrl+B)");
+        btnBatch.Click += BtnBatch_Click;
+
         btnConvert = CreateCommandButton("Créer PDF", CreateConvertIcon24(), "Créer le fichier PDF");
         btnConvert.Font = new Font("Segoe UI", 9, FontStyle.Bold);
         btnConvert.ForeColor = Color.FromArgb(0, 95, 184);
@@ -344,6 +348,7 @@ public class MainForm : Form
         toolStrip.Items.Add(recentDropDown);
         toolStrip.Items.Add(new ToolStripSeparator());
         toolStrip.Items.Add(btnPreviewResult);
+        toolStrip.Items.Add(btnBatch);
         toolStrip.Items.Add(btnConvert);
 
         // Bouton Aide
@@ -377,6 +382,12 @@ UTILISATION
 2. Réorganisez l'ordre avec les boutons ↑ et ↓
 3. Cliquez sur « Créer PDF » pour générer le fichier
 
+CONVERSION PAR LOT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Le bouton « Par lot » crée un PDF par dossier
+sélectionné, regroupant toutes ses images.
+Un écran suit l'avancement dossier par dossier.
+
 FORMATS SUPPORTÉS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Images : JPG, PNG, BMP, GIF, TIFF
@@ -387,6 +398,7 @@ RACCOURCIS CLAVIER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Ctrl+O     Ajouter des fichiers
 Ctrl+S     Créer le PDF
+Ctrl+B     Conversion par lot
 Ctrl+P     Afficher/masquer l'aperçu
 Suppr      Supprimer la sélection
 F5         Aperçu du résultat
@@ -771,6 +783,30 @@ Version {AppVersion}
         using var font = new Font("Arial", 8, FontStyle.Bold);
         using var textBrush = new SolidBrush(Color.White);
         g.DrawString("PDF", font, textBrush, 3, 7);
+        return bmp;
+    }
+
+    // Conversion par lot : deux dossiers empilés, évoquant plusieurs sorties.
+    private static Bitmap CreateBatchIcon24()
+    {
+        var bmp = new Bitmap(24, 24);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
+
+        // Dossier arrière (plus clair).
+        using (var back = new SolidBrush(Color.FromArgb(255, 209, 128)))
+        {
+            g.FillRectangle(back, 7, 4, 13, 4);
+            g.FillRectangle(back, 6, 6, 15, 11);
+        }
+        // Dossier avant (accent).
+        using (var frontTab = new SolidBrush(Color.FromArgb(255, 180, 60)))
+            g.FillRectangle(frontTab, 3, 9, 9, 3);
+        using (var front = new SolidBrush(Color.FromArgb(255, 196, 87)))
+            g.FillRectangle(front, 2, 11, 17, 9);
+        using (var pen = new Pen(Color.FromArgb(214, 154, 40), 1f))
+            g.DrawRectangle(pen, 2, 11, 17, 9);
         return bmp;
     }
 
@@ -1784,9 +1820,19 @@ Version {AppVersion}
         btnMoveUp.Enabled = enabled;
         btnMoveDown.Enabled = enabled;
         btnClear.Enabled = enabled;
+        btnBatch.Enabled = enabled;
         btnConvert.Enabled = enabled;
         btnPreviewResult.Enabled = enabled;
         btnTogglePreview.Enabled = enabled;
+    }
+
+    private void BtnBatch_Click(object? sender, EventArgs e)
+    {
+        // La conversion par lot est indépendante de la liste de fusion courante :
+        // elle ouvre son propre écran (sélection de dossiers + suivi d'avancement).
+        if (isBusy) return;
+        using var dlg = new BatchConvertForm();
+        dlg.ShowDialog(this);
     }
 
     private async void BtnPreviewResult_Click(object? sender, EventArgs e)
@@ -1960,6 +2006,10 @@ Version {AppVersion}
                 case Keys.P: // Ctrl+P - Aperçu
                     btnTogglePreview.Checked = !btnTogglePreview.Checked;
                     BtnTogglePreview_Click(sender, e);
+                    e.Handled = true;
+                    break;
+                case Keys.B: // Ctrl+B - Conversion par lot
+                    BtnBatch_Click(sender, e);
                     e.Handled = true;
                     break;
             }
